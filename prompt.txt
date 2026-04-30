@@ -1,0 +1,43 @@
+Actúa como un Senior Backend Developer. Necesito implementar un Analizador de Sentimientos profesional utilizando el siguiente stack:
+
+Stack Tecnológico:
+
+    Gestor de paquetes: uv (indispensable usar uv init, uv add y pyproject.toml).
+
+    Framework: FastAPI con Pydantic v2 para validación y esquemas.
+
+    IA: Cliente oficial de Groq con JSON Mode habilitado (modelo Llama 3).
+
+    Logging: Loguru para toda la trazabilidad del sistema.
+
+Requerimientos de Arquitectura y Código:
+
+    Estructura de Carpetas: Diseño modular con separación clara entre /api (rutas), /services (lógica de Groq), /schemas (Pydantic) y /core (configuración y logs).
+
+    Configuración de Loguru:
+
+        Configurar un sumidero (sink) para consola con formato personalizado.
+
+        Configurar un sumidero para archivo (app.log) con rotación (ej. 10MB) y retención (ej. 7 días).
+
+        Loguear: tiempo de ejecución de la llamada a Groq, tokens consumidos y cualquier error de validación.
+
+    Resiliencia y Errores:
+
+        Uso de Exception Handlers globales en FastAPI.
+
+        Captura específica de groq.RateLimitError con log de nivel WARNING y respuesta HTTP 429.
+
+        Captura de errores de conexión con log de nivel CRITICAL.
+
+    Validación de Salida: Usar Pydantic para parsear el string JSON que devuelve Groq y asegurar que el frontend siempre reciba el contrato esperado.
+
+Entregables:
+
+    Lista de comandos uv para preparar el entorno desde cero.
+
+    Código completo de core/logger.py configurando Loguru.
+
+    Implementación de la lógica del servicio Groq usando el modo JSON.
+
+    Ejemplo de respuesta de la API y cómo manejar los reintentos en el cliente.
