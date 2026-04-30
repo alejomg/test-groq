@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     # print("Connecting to DB...")
     # Example: await database.connect()
     
-    # Guardamos el cliente en el 'state' para que sea accesible desde los routers
+    # saving the client to the 'state' for access from the routers.
     app.state.groq_client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
     
     yield  # Here the app runs and serves requests
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     # --- Shutdown logic ---
     print(f"shutting down {settings.PROJECT_NAME}...")
     # print("Closing resources and cleanup...")
-    # Ejemplo: await database.disconnect()
+    # Example: await database.disconnect()
     await app.state.groq_client.close()
 
 app = FastAPI(
@@ -33,7 +33,7 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-#make routers visible
+# making routers visible
 app.include_router(items.router, prefix="/api/v1/item", tags=["Item"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 
@@ -45,4 +45,7 @@ def root():
 
 @app.get("/config-check")
 def check_config():
-    return {"app_name": settings.PROJECT_NAME}
+    return {
+		"app_name": settings.PROJECT_NAME,
+		"groq_model": settings.GROQ_MODEL
+	}

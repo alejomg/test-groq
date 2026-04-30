@@ -1,36 +1,48 @@
+import os
 from fastapi import APIRouter, Request, HTTPException
 from app.schemas.chat_request import ChatRequest
+from dotenv import load_dotenv
 
 router = APIRouter()
+
+load_dotenv()
+
 
 @router.post("/ask")
 async def ask_groq(request: Request, data: ChatRequest):
 	
-	# Recuperamos el cliente desde el estado de la app
+	# recovering the client from the 'state'
     client = request.app.state.groq_client
     
+    model = os.environ.get("GROQ_MODEL")
+    
     try:
-        # Realizar la petición a Groq
+        # sending the request to groq
         chat_completion = await client.chat.completions.create(
             messages=[
                 {"role": "user", "content": data.prompt}
             ],
-            model=data.model,
+            model=model,
         )
         
-        # Devolver la respuesta
+        # returning the response
+        response = chat_completion.choices[0].message.content
+        
         return {
             "status": "success",
-            "response": chat_completion.choices[0].message.content,
+            "response": response,
             "info": {
-                "model": data.model,
-                "usage": chat_completion.usage # Opcional: ver cuántos tokens usaste
+                "model": model,
+                "usage": chat_completion.usage # Optional: to see token usage
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en Groq: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error in Groq: {str(e)}")
 
-# Endpoint de salud simple
+
+# simple health check
 @router.get("/health")
 def health_check():
-    return {"status": "online"}
+    return {
+		"status": "online"
+		}

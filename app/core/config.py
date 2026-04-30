@@ -6,9 +6,8 @@ class Settings(BaseSettings):
     # Define variables and their types (automatic validation)
     PROJECT_NAME: str
     DEBUG: bool = False
+    GROQ_MODEL: str
     #add more entries from .env
-    #DATABASE_URL: str
-    #SECRET_KEY: str
 
     # Setup to read the .env file
     model_config = SettingsConfigDict(
