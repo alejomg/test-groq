@@ -1,5 +1,6 @@
-# IDE config
+# IDEs config
 config.geany
+.idea
 
 # Entornos virtuales
 .venv/
