@@ -8,7 +8,7 @@ router = APIRouter()
 @router.post("/", status_code=201)
 async def create_item(item: Item):
     # Here Pydantic already validated item properties
-    logger.info(f"Payload: {item.model_dump()}")
+    logger.debug(f"Payload: {item.model_dump()}")
     
     if item.price > 10000:
         logger.error(f"Price too high: {item.price}")

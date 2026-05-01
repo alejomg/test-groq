@@ -1,16 +1,18 @@
 import logging
 import sys
 from loguru import logger
+from app.core.config import settings
+
 
 def setup_logging():
     # Eliminar los manejadores por defecto de Loguru
     logger.remove()
 
-    # Añadir manejador para la consola con un formato limpio
+    # Añadir manejador (sink) para la consola con un formato limpio
     logger.add(
         sys.stdout,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level="INFO",
+        level=settings.LOGURU_LEVEL,
     )
 
     # Opcional: Añadir un archivo con rotación

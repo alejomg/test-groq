@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     DEBUG: bool = False
     GROQ_MODEL: str
+    LOGURU_LEVEL: str
     #add more entries from .env
 
     # Setup to read the .env file
