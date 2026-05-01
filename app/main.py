@@ -6,14 +6,19 @@ from app.api.v1.endpoints import chat
 from app.core.config import settings
 from groq import AsyncGroq
 from dotenv import load_dotenv
+from loguru import logger
+from app.core.logger_config import setup_logging
 
 load_dotenv()
+
+# Inicializar logs al cargar el módulo
+setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup logic ---
-    print(f"starting up {settings.PROJECT_NAME}...")
-    # print("Connecting to DB...")
+    logger.info(f"starting up {settings.PROJECT_NAME}...")
+    # logger.info("Connecting to DB...")
     # Example: await database.connect()
     
     # saving the client to the 'state' for access from the routers.
@@ -22,7 +27,7 @@ async def lifespan(app: FastAPI):
     yield  # Here the app runs and serves requests
     
     # --- Shutdown logic ---
-    print(f"shutting down {settings.PROJECT_NAME}...")
+    logger.info(f"shutting down {settings.PROJECT_NAME}...")
     # print("Closing resources and cleanup...")
     # Example: await database.disconnect()
     await app.state.groq_client.close()
