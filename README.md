@@ -1,68 +1,60 @@
-## Cambiar alias de python3 a python
+# Test Groq
 
-Linux intenta evitar que se confunda la versión antigua (Python 2) con la moderna. Esto configura el sistema para que **python** apunte a la versión 3 de forma global.
+This project is a Python-based application built using the FastAPI web framework and Uvicorn for ASGI. Main purpose is testing Groq capabilities. 
 
-*sudo apt update*
-*sudo apt install python-is-python3*
+## After Cloning
 
+You need to do a couple of tasks in order to locally run or develop the application.
 
-## uv (El nuevo estándar de alto rendimiento)
+### Set up the Virtual Environment
 
-Administrador de paquetes y de proyectos de Python
+> Python 3.12.x should be already installed in the OS
 
-*curl -LsSf https://astral.sh/uv/install.sh | sh*
+This project uses UV for virtual environment and dependency management.
 
-- Crear entorno virtual: *uv venv*
+1. Install UV, if already installed skip.
 
-- Borrar entorno virtual: *rm -rf .venv*
+**macOS / Linux:**
+```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-### Usar uv en la forma tradicional con "pip"
+**Windows:**
+```powershell
+powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-- Activar entorno: *source .venv/bin/activate*
+2. Change to the `application directory`
+```bash
+  cd /path/to/test-groq
+```
+
+3. Create and activate the virtual environment with dependencies
+```bash
+  uv sync --dev
+```
+
+After these steps, you should have all dependencies needed to develop and locally run test-groq.
+
+> Notice: From now on, you should always install new dependencies using `uv add [PACKAGE_NAME]` and for development dependencies use `uv add --dev [PACKAGE_NAME]`. The *uv.lock* and *pyproject.toml* files will be automatically updated.
  
-Con *uv* no hace falta activar el entorno virtual para instalar paquetes.
+4. Create a `.env` file and update it with your actual environment variables
+```bash
+  cp .env.sample .env
+```
 
-- Instalar un paquete: *uv pip install <paquete1> <paquete2>*
+### Running the Application
 
-- Instalar los paquetes, y sus dependencias, listados en requirements.txt: *uv pip install -r requirements.txt*
+This application is using Uvicorn ASGI as Web server.
  
-### Usar uv en la forma moderna
+1. Change to the `application directory`
+```bash
+  cd /path/to/test-groq
+```
 
-- Inicializar el proyecto: *uv init* Esto creará un archivo *pyproject.toml* básico, *.python-version* y *README.md*.
+2. Start the application using UV:
+```bash
+  uv run uvicorn app.main:app --reload
+```
 
-- Añadir un paquete: *uv add <paquete1> <paquete2>*
-
-- Añadir los paquetes, y sus dependencias, listados en requirements.txt para convertir requirements.txt al formato moderno: *uv add -r requirements.txt*
-
-
-## Stack de desarrollo ligero
-
-El objetivo principal es evitar que el editor "secuestre" toda la memoria, dejando espacio para que el intérprete de Python y el sistema respiren.
-
-- Editor: Geany. Consumo mínimo (<100MB).
-*sudo apt install geany*
-
-- Navegador: Firefox. Intentar tener solo las pestañas de la documentación de FastAPI y localhost:8000/docs.
-
-- Terminal: Xfce Terminal. Viene por defecto en Mint XFCE y es muy ligera para correr Uvicorn.
-
-- Entorno Virtual: Obligatorio. Mantiene las lbrerías de FastAPI aisladas y ordenadas.
-*python3 -m venv venv*
-
-
-## Rendimiento de la memoria
-
-**ZRAM** Si no está activo, instalar *zram-config*. Esto comprime los datos en la RAM antes de usar el disco (swap), lo que hace que la RAM rinda como si fuera un poco más.
-
-
-## Ejecutar uvicorn desde la terminal
-
-Desde la carpeta del proyecto. Limita los *workers* para asegurar que no se disparen múltiples procesos que intenten devorar la RAM simultáneamente.
-
-### Usando uv en la forma tradicional con "pip"
-
-*.venv/bin/python -m uvicorn app.main:app --reload --workers 1*
-
-### Usando uv en la forma moderna
-
-*uv run uvicorn app.main:app --reload --workers 1*
+Now the application should be accessible at `http://localhost:8000`. The Swagger UI (web interface) can be accessed at `http://localhost:8000/docs`.
