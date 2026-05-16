@@ -4,6 +4,7 @@ config.geany
 
 # Entornos virtuales
 .venv/
+activate
 **/__pycache__/
 
 # Variables de entorno
