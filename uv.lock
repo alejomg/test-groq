@@ -485,7 +485,7 @@ wheels = [
 ]
 
 [[package]]
-name = "test"
+name = "test-groq"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

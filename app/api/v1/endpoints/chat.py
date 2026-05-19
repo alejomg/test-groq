@@ -1,6 +1,7 @@
 import os
 import json
 import wikipedia
+import uuid
 from fastapi import APIRouter, Request, HTTPException
 from app.schemas.chat_request import ChatRequest
 from app.schemas.list_request import ListRequest
@@ -28,11 +29,17 @@ async def ask_groq(request: Request, data: ChatRequest):
             model=model,
         )
         
+        unique_id = data.uuid
+        if not unique_id:
+            # generating uuid
+            unique_id = str(uuid.uuid4())
+        
         # returning the response
         response = chat_completion.choices[0].message.content
         
         return {
             "status": "success",
+            "uuid": unique_id,
             "response": response,
             "info": {
                 "model": model,
