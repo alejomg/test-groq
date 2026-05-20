@@ -4,6 +4,7 @@ import wikipedia
 import uuid
 from fastapi import APIRouter, Request, HTTPException
 from app.schemas.chat_request import ChatRequest
+from app.schemas.chat_response import ChatResponse, SingleChatResponse, ChatResponseInfo
 from app.schemas.list_request import ListRequest
 from dotenv import load_dotenv
 
@@ -14,38 +15,51 @@ load_dotenv()
 model = os.environ.get("GROQ_MODEL")
 
 
-@router.post("/ask")
+@router.post("/ask", response_model=ChatResponse)
 async def ask_groq(request: Request, data: ChatRequest):
 	
 	# recovering the client from the 'state'
     client = request.app.state.groq_client
     
     try:
+        userMessage = data.prompt
+		
         # sending the request to groq
         chat_completion = await client.chat.completions.create(
             messages=[
-                {"role": "user", "content": data.prompt}
+                {"role": "user", "content": userMessage}
             ],
             model=model,
         )
+        
+        # getting the response
+        systemResponse = chat_completion.choices[0].message.content
+        
+        # building chat (mapping them to the SingleResponse shape)
+        raw_outputs = [
+            {"message": userMessage, "type": "user"},
+            {"message": systemResponse, "type": "system"}
+        ]
+    
+        # Convert dictionaries to SingleChatResponse Pydantic model
+        processed_responses = [SingleChatResponse(**item) for item in raw_outputs]
         
         unique_id = data.uuid
         if not unique_id:
             # generating uuid
             unique_id = str(uuid.uuid4())
         
-        # returning the response
-        response = chat_completion.choices[0].message.content
-        
-        return {
-            "status": "success",
-            "uuid": unique_id,
-            "response": response,
-            "info": {
-                "model": model,
-                "usage": chat_completion.usage # Optional: to see token usage
-            }
-        }
+        # 3. Return the generic wrapper
+        return ChatResponse(
+            status="success",
+            uuid=unique_id,
+            chat=processed_responses,
+            info=ChatResponseInfo(
+                model=model,
+                usage=chat_completion.usage.model_dump() if chat_completion.usage else None  # Optional: Passes Groq's exact token usage object smoothly
+            )
+        )
+                    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in Groq: {str(e)}")
 
