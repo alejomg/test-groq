@@ -8,18 +8,27 @@ from groq import AsyncGroq
 from dotenv import load_dotenv
 from loguru import logger
 from app.core.logger_config import setup_logging
+from app.db.session import engine, Base
+from sqlalchemy import text
 
 load_dotenv()
 
-# Inicializar logs al cargar el módulo
+# starting logs
 setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup logic ---
     logger.info(f"starting up {settings.PROJECT_NAME}...")
-    # logger.info("Connecting to DB...")
-    # Example: await database.connect()
+    
+    # Crea las tablas automáticamente en tu SQLite local si no existen
+    # (Nota: En producción con Postgres se suele usar Alembic, pero esto es perfecto para empezar)
+    logger.info("Initializing database tables...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        
+        logger.info("Checking database connection...")
+        await conn.execute(text("SELECT 1"))
     
     # saving the client to the 'state' for access from the routers.
     app.state.groq_client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
@@ -31,6 +40,10 @@ async def lifespan(app: FastAPI):
     # print("Closing resources and cleanup...")
     # Example: await database.disconnect()
     await app.state.groq_client.close()
+    
+    # Cierra el pool de conexiones de la base de datos de forma asíncrona
+    await engine.dispose()
+    logger.info("Database connections closed.")
 
 app = FastAPI(
     lifespan=lifespan,
