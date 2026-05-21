@@ -2,12 +2,15 @@
 config.geany
 .idea
 
-# Entornos virtuales
+# virtual environments
 .venv/
 activate
 **/__pycache__/
 
-# Variables de entorno
+# environment variables
 .env
 .env.local
 .env.production
+
+# local DB
+*.db
