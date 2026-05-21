@@ -6,7 +6,7 @@ from app.core.config import settings
 # En Render buscará la URL de Postgres. En local usará SQLite.
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "sqlite+aiosqlite:///./local_chats.db"
+    f"sqlite+aiosqlite:///./{settings.DB_NAME}.db"
 )
 
 # Configuración especial solo si la URL es de SQLite

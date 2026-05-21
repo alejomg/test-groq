@@ -1,5 +1,4 @@
 # Pydantic Settings
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -8,6 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     GROQ_MODEL: str
     LOGURU_LEVEL: str
+    DB_NAME: str
     #add more entries from .env
 
     # Setup to read the .env file

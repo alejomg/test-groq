@@ -19,15 +19,15 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup logic ---
-    logger.info(f"starting up {settings.PROJECT_NAME}...")
+    logger.info(f"Starting up {settings.PROJECT_NAME}...")
     
     # Crea las tablas automáticamente en tu SQLite local si no existen
     # (Nota: En producción con Postgres se suele usar Alembic, pero esto es perfecto para empezar)
-    logger.info("Initializing database tables...")
+    logger.info(f"Initializing {settings.DB_NAME} DB tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-        logger.info("Checking database connection...")
+        logger.info(f"Checking {settings.DB_NAME} DB connection...")
         await conn.execute(text("SELECT 1"))
     
     # saving the client to the 'state' for access from the routers.
@@ -36,14 +36,14 @@ async def lifespan(app: FastAPI):
     yield  # Here the app runs and serves requests
     
     # --- Shutdown logic ---
-    logger.info(f"shutting down {settings.PROJECT_NAME}...")
+    logger.info(f"Shutting down {settings.PROJECT_NAME}...")
     # print("Closing resources and cleanup...")
     # Example: await database.disconnect()
     await app.state.groq_client.close()
     
     # Cierra el pool de conexiones de la base de datos de forma asíncrona
     await engine.dispose()
-    logger.info("Database connections closed.")
+    logger.info(f"{settings.DB_NAME} DB connections closed.")
 
 app = FastAPI(
     lifespan=lifespan,
