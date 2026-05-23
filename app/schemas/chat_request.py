@@ -3,4 +3,4 @@ from uuid import UUID
 
 class ChatRequest(BaseModel):
     uuid: UUID | None = Field(None, description="Optional unique identifier for the chat")
-    prompt: str = Field(..., min_length=3, example="Tell me one interesting fact about space in one sentence.")
+    prompt: str = Field(..., min_length=3, description="Message sent by the user", example="Tell me one interesting fact about space in one sentence.")
