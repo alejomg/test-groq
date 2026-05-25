@@ -1,8 +1,10 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.api.v1.endpoints import items
-from app.api.v1.endpoints import chat
+
+from api.v1.endpoints import dialog
+from api.v1.endpoints import items
+from api.v1.endpoints import chat
 from app.core.config import settings
 from groq import AsyncGroq
 from dotenv import load_dotenv
@@ -54,6 +56,7 @@ app = FastAPI(
 # making routers visible
 app.include_router(items.router, prefix="/api/v1/item", tags=["Item"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
+app.include_router(dialog.router, prefix="/api/v1/dialog", tags=["Dialog"])
 
 
 @app.get("/")
@@ -64,6 +67,6 @@ def root():
 @app.get("/config-check")
 def check_config():
     return {
-		"app_name": settings.PROJECT_NAME,
-		"groq_model": settings.GROQ_MODEL
-	}
+        "app_name": settings.PROJECT_NAME,
+        "groq_model": settings.GROQ_MODEL
+    }
