@@ -20,4 +20,5 @@ dependencies = [
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
+    "chainlit>=2.11.1",
 ]

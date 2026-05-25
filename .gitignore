@@ -14,3 +14,6 @@ activate
 
 # local DB
 *.db
+
+# chainlit
+.chainlit/

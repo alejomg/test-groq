@@ -50,7 +50,7 @@ def setup_logging():
         "uvicorn.access",
         "fastapi",
         "sqlalchemy.engine",
-        "sqlalchemy.pool"
+        "sqlalchemy.pool",
     ]
 
     for logger_name in loggers_to_intercept:
