@@ -6,7 +6,7 @@ from app.core.config import settings
 # En Render buscará la URL de Postgres. En local usará SQLite.
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    f"sqlite+aiosqlite:///./{settings.DB_NAME}.db"
+    f"sqlite+aiosqlite:///./app/db/{settings.DB_NAME}.db"
 )
 
 # Configuración especial solo si la URL es de SQLite
@@ -26,9 +26,11 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
+
 # 3. Clase Base para que hereden tus modelos
 class Base(DeclarativeBase):
     pass
+
 
 # Dependencia (yield) para inyectar la sesión en tus endpoints de FastAPI
 async def get_db():
