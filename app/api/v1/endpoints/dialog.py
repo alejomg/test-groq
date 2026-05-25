@@ -29,8 +29,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         dialog = Dialog.create_new()
         db.add(dialog)
         await db.commit()
-        await db.refresh(dialog, attribute_names=["messages"])
-        
+
         dialog_sytem_prompt = DMessage.create_sytem_prompt(
             dialog_id=dialog.id,
             text=get_system_prompt_message(),
@@ -38,6 +37,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         db.add(dialog_sytem_prompt)
         await db.commit()
         
+        await db.refresh(dialog, attribute_names=["messages"])
         #turn_history = init_history_turn()
         
     else:
