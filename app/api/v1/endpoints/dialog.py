@@ -6,11 +6,11 @@ from loguru import logger
 from app.db.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from models.dialog import Dialog, DMessage
-from schemas.dialog_request import DialogRequest
-from schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
+from app.models.dialog import Dialog, DMessage
+from app.schemas.dialog_request import DialogRequest
+from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
     DialogMetadata
-from util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages
+from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages
 
 router = APIRouter()
 

@@ -2,9 +2,9 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from api.v1.endpoints import dialog
-from api.v1.endpoints import items
-from api.v1.endpoints import chat
+from app.api.v1.endpoints import dialog
+from app.api.v1.endpoints import items
+from app.api.v1.endpoints import chat
 from app.core.config import settings
 from groq import AsyncGroq
 from dotenv import load_dotenv

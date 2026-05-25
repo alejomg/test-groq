@@ -1,5 +1,5 @@
-from models.dialog import DMessage, Dialog
-from schemas.dialog_response import DialogSimpleMessage
+from app.models.dialog import DMessage, Dialog
+from app.schemas.dialog_response import DialogSimpleMessage
 
 
 def get_raw_message_from_dmessage(dialog_message: DMessage) -> dict[str, str]:
