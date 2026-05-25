@@ -10,7 +10,7 @@ from app.models.dialog import Dialog, DMessage
 from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
     DialogMetadata
-from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages
+from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog
 
 router = APIRouter()
 
@@ -36,16 +36,19 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
         if not dialog:
             raise HTTPException(status_code=404, detail="Dialog not found")
+            
+        logger.info(f"found dialog: {duuid}")
 
+    turn_history = get_history_turn_from_dialog(dialog)
+    turn_history.append({"role": "user", "content": user_message})
+    
     # recovering the Groq client from the 'state'
     groq_client = request.app.state.groq_client
 
     # sending the request to groq
     try:
         dialog_completion = await groq_client.chat.completions.create(
-            messages=[
-                {"role": "user", "content": user_message}
-            ],
+            messages=turn_history,
             model=model,
         )
 

@@ -32,3 +32,26 @@ def get_dialog_messages_from_raw_messages(raw_messages: list[dict[str, str]]) ->
     :return:
     """
     return [DialogSimpleMessage(**raw_message) for raw_message in raw_messages]
+
+
+def get_turn_from_dmessage(dialog_message: DMessage) -> dict[str, str]:
+    return {
+        "content": dialog_message.text,
+        "role": dialog_message.type.lower()
+    }
+
+
+def get_history_turn_from_dialog(dialog: Dialog) -> list[dict[str, str]]:
+
+    """
+    Returns the history turn of a dialog
+    :param dialog:
+    :return:
+    """
+    if not dialog or not dialog.messages:
+        return []
+
+    return [
+        get_turn_from_dmessage(message)
+        for message in dialog.messages
+    ]
