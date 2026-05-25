@@ -10,7 +10,7 @@ from app.models.dialog import Dialog, DMessage
 from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
     DialogMetadata
-from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog
+from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog, init_history_turn, get_system_prompt_message
 
 router = APIRouter()
 
@@ -29,7 +29,17 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         dialog = Dialog.create_new()
         db.add(dialog)
         await db.commit()
-        await db.refresh(dialog)
+        await db.refresh(dialog, attribute_names=["messages"])
+        
+        dialog_sytem_prompt = DMessage.create_sytem_prompt(
+            dialog_id=dialog.id,
+            text=get_system_prompt_message(),
+        )
+        db.add(dialog_sytem_prompt)
+        await db.commit()
+        
+        #turn_history = init_history_turn()
+        
     else:
         logger.info(f"getting dialog: {duuid}")
         dialog = await Dialog.get_by_duuid(db, duuid)

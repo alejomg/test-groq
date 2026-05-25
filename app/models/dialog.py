@@ -11,6 +11,7 @@ from app.db.session import Base
 
 
 class DMessageType(str, enum.Enum):
+    SYSTEM = "SYSTEM"
     USER = "USER"
     ASSISTANT = "ASSISTANT"
 
@@ -36,7 +37,7 @@ class Dialog(Base):
     @classmethod
     def create_new(cls) -> "Dialog":
         """Método de factoría para inicializar consistentemente un nuevo dialogo."""
-        return cls(duuid=uuid.uuid4())
+        return cls(duuid=uuid.uuid4(), messages=[])
         
     @classmethod
     async def get_by_duuid(cls, db: AsyncSession, duuid: UUID) -> Optional["Dialog"]:
@@ -99,6 +100,17 @@ class DMessage(Base):
     dialog: Mapped["Dialog"] = relationship("Dialog", back_populates="messages")
 
     # --- MÉTODOS DE FACTORÍA Y EXTRACTORES (Rich Data Model) ---
+
+    @classmethod
+    def create_sytem_prompt(cls, dialog_id: int, text: str) -> "DMessage":
+        """Factoría especializada para el system prompt."""
+        return cls(
+            dialog_id=dialog_id,
+            text=text,
+            type=DMessageType.SYSTEM,
+            model=None,
+            usage=None
+        )
 
     @classmethod
     def create_user_message(cls, dialog_id: int, text: str) -> "DMessage":
