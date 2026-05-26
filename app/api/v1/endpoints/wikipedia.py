@@ -2,8 +2,9 @@ import os
 import json
 import wikipedia
 from fastapi import APIRouter, Request
-from app.schemas.list_request import ListRequest
+from app.schemas.article_request import ArticleRequest
 from dotenv import load_dotenv
+from loguru import logger
 
 router = APIRouter()
 
@@ -12,40 +13,8 @@ load_dotenv()
 model = os.environ.get("GROQ_MODEL")
 
 
-# simple health check
-@router.get("/health")
-def health_check():
-    return {
-        "status": "online"
-    }
-
-
-generate_wikipedia_reading_list_tool = {
-    "type": "function",
-    "function": {
-        "name": "generate_wikipedia_reading_list",
-        "description": "search REAL wikipedia pages and return title + URL.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "research_topic": {
-                    "type": "string",
-                    "description": "The overall research topic."
-                },
-                "article_titles": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of Wikipedia article titles."
-                }
-            },
-            "required": ["research_topic", "article_titles"]
-        }
-    }
-}
-
-
-@router.post("/list")
-async def list_groq(request: Request, data: ListRequest):
+@router.post("/articles")
+async def get_articles(request: Request, data: ArticleRequest):
     # recovering the client from the 'state'
     client = request.app.state.groq_client
 
@@ -95,6 +64,30 @@ async def list_groq(request: Request, data: ListRequest):
         "articles": [],
         "note": "Model did not call tool"
     }
+
+
+generate_wikipedia_reading_list_tool = {
+    "type": "function",
+    "function": {
+        "name": "generate_wikipedia_reading_list",
+        "description": "search REAL wikipedia pages and return title + URL.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "research_topic": {
+                    "type": "string",
+                    "description": "The overall research topic."
+                },
+                "article_titles": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of Wikipedia article titles."
+                }
+            },
+            "required": ["research_topic", "article_titles"]
+        }
+    }
+}
 
 
 def generate_wikipedia_reading_list(research_topic, article_titles):

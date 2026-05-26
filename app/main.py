@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.v1.endpoints import dialog
+from app.api.v1.endpoints import wikipedia
 from app.api.v1.endpoints import items
-from app.api.v1.endpoints import chat
 from app.core.config import settings
 from groq import AsyncGroq
 from dotenv import load_dotenv
@@ -54,19 +54,15 @@ app = FastAPI(
 )
 
 # making routers visible
-app.include_router(items.router, prefix="/api/v1/item", tags=["Item"])
-app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(dialog.router, prefix="/api/v1/dialog", tags=["Dialog"])
+app.include_router(wikipedia.router, prefix="/api/v1/wikipedia", tags=["Wikipedia"])
+app.include_router(items.router, prefix="/api/v1/item", tags=["Item"])
 
 
 @app.get("/")
 def root():
-    return {"message": "API Online"}
-
-
-@app.get("/config-check")
-def check_config():
     return {
         "app_name": settings.PROJECT_NAME,
+        "status": "Online",
         "groq_model": settings.GROQ_MODEL
     }
