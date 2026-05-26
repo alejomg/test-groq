@@ -1,6 +1,10 @@
 # Test Groq
 
-This project is a Python-based application built using the FastAPI web framework and Uvicorn for ASGI. Main purpose is testing Groq capabilities. 
+This project is a Python-based application built using the FastAPI web framework and Uvicorn for ASGI, with an independent frontend user interface powered by Chainlit. The main purpose is testing Groq capabilities in a decoupled architecture.
+
+The project is split into two independent services:
+* **Backend (FastAPI):** Exposes the REST API, handles database connections, manages chat history, and interacts with the Groq API.
+* **Frontend (Chainlit):** A lightweight web interface that acts as an HTTP client to communicate exclusively with the FastAPI backend.
 
 ## After Cloning
 
@@ -45,16 +49,23 @@ After these steps, you should have all dependencies needed to develop and locall
 
 ### Running the Application
 
-This application is using Uvicorn ASGI as Web server.
+Since the frontend and backend are completely decoupled, you need to start both services independently during development.
  
 1. Change to the `application directory`
 ```bash
   cd /path/to/test-groq
 ```
 
-2. Start the application using UV:
+2. Start the FastAPI application using UV:
 ```bash
-  uv run uvicorn app.main:app --reload
+  uv run uvicorn app.main:app --reload --port 8000
 ```
 
-Now the application should be accessible at `http://localhost:8000`. The Swagger UI (web interface) can be accessed at `http://localhost:8000/docs`.
+3. Start the Chainlit interface using UV:
+```bash
+  uv run chainlit run ui_chainlit/app.py -w --port 8081
+```
+
+Now, the backend API will be accessible at `http://localhost:8000`. You can explore and test the endpoints directly via the Swagger UI at `http://localhost:8000/docs`.
+
+And the Chatbot UI will automatically open in your default browser, or you can access it manually at `http://localhost:8081`.
