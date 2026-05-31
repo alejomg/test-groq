@@ -68,7 +68,7 @@ def setup_logging():
 
     # Forzar el nivel de SQLAlchemy manualmente ya que quitamos el echo=True
     # Si tu LOGURU_LEVEL es DEBUG o INFO, las consultas se verán a través de Loguru.
-    if settings.LOGURU_LEVEL == "DEBUG":
+    if settings.SHOW_SQL:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
     else:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

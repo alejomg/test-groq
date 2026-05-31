@@ -1,4 +1,5 @@
 import os
+import json
 from uuid import UUID
 from fastapi import APIRouter, Request, Depends, HTTPException
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
     DialogMetadata
 from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog, init_history_turn, get_system_prompt_message
+from app.util.tool_util import tools, get_current_datetime
 
 router = APIRouter()
 
@@ -38,7 +40,8 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         await db.commit()
         
         await db.refresh(dialog, attribute_names=["messages"])
-        #turn_history = init_history_turn()
+        
+        logger.info(f"new dialog: {dialog.duuid}")
         
     else:
         logger.info(f"getting dialog: {duuid}")
@@ -57,10 +60,14 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
     # sending the request to groq
     try:
+        logger.info(f"sending request: {turn_history}")
         dialog_completion = await groq_client.chat.completions.create(
             messages=turn_history,
             model=model,
+            tools=tools,
+            tool_choice="auto"
         )
+        logger.info(f"got response: {dialog_completion}")
 
         dialog_user_message = DMessage.create_user_message(
             dialog_id=dialog.id,
@@ -68,6 +75,44 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         )
         db.add(dialog_user_message)
 
+        dialog_completion_message = dialog_completion.choices[0].message
+        logger.info(f"****** {user_message}")
+        logger.info(f"****** {dialog_completion_message}")
+        
+        tool_calls = dialog_completion_message.tool_calls
+        if tool_calls:
+            logger.info(f"Groq trying to use a tool -> tool_calls: {tool_calls}")
+            
+            # 1. Adding Groq tool use request to history
+            turn_history.append(dialog_completion_message)
+            
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_arguments = json.loads(tool_call.function.arguments)
+                
+                logger.info(f"using tool: {function_name}")
+                logger.info(f"arguments: {function_arguments}")
+                
+                # 2. logic to choose function to use
+                if function_name == "get_current_datetime":
+                    tool_result = get_current_datetime(date_format=function_arguments.get("date_format"))
+                    
+                logger.info(f"tool_result tool: {tool_result}")
+                
+                # 3. Adding tool result to history
+                turn_history.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": tool_result,
+                })
+                    
+                # 4. Send everything back to Groq to get final response
+                dialog_completion = await groq_client.chat.completions.create(
+                    model=model,
+                    messages=turn_history
+                )
+        
         # getting the response
         assistant_message = dialog_completion.choices[0].message.content
 

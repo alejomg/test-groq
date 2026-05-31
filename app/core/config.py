@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str
     LOGURU_LEVEL: str
     DB_NAME: str
+    SHOW_SQL: bool = False
     #add more entries from .env
 
     # Setup to read the .env file
