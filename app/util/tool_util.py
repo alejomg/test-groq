@@ -10,7 +10,7 @@ get_current_datetime_tool = {
         "type": "function",
         "function": {
             "name": "get_current_datetime",
-            "description": "Returns the current date and time formatted according to the specified format.",
+            "description": "Returns the current date and time formatted according to the specified format. Use this tool ONLY when the user explicitly asks for the current date, time, or day, or when the current date is strictly required for a calculation. DO NOT invoke this tool for general conversation.",
             "parameters": {
                 "type": "object",
                 "properties": {
