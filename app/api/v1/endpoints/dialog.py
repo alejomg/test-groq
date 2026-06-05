@@ -12,7 +12,9 @@ from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
     DialogMetadata
 from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog, init_history_turn, get_system_prompt_message
-from app.util.tool_util import tools, get_current_datetime
+from app.util.tool_util import tools, get_current_datetime, get_dialog_by_uuid
+from groq import BadRequestError
+
 
 router = APIRouter()
 
@@ -95,7 +97,16 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
                 
                 # 2. logic to choose function to use
                 if function_name == "get_current_datetime":
-                    tool_result = get_current_datetime(date_format=function_arguments.get("date_format"))
+                    tool_result = get_current_datetime()
+                elif function_name == "get_dialog_by_uuid":
+                    tool_result = await get_dialog_by_uuid(
+                        db=db, 
+                        duuid_str=function_arguments.get("duuid_str")
+                    )
+                else:
+                    tool_result = json.dumps(
+                        {"error": f"Tool {function_name} not implemented."}
+                    )
                     
                 logger.info(f"tool_result tool: {tool_result}")
                 
@@ -148,11 +159,39 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
             metadata=dialog_metadata
         )
 
+    except BadRequestError as bre:
+        await db.rollback()
+        
+        # 1. Intentamos extraer el cuerpo completo del error en formato diccionario
+        error_response = getattr(bre, "response", None)
+        error_json = {}
+        if error_response:
+            try:
+                error_json = error_response.json()
+            except Exception:
+                error_json = {"raw_body": error_response.text}
+
+        # 2. Logeamos con Loguru usando formato JSON bonito para la consola
+        logger.error("❌ ERROR 400 EN LA API DE GROQ (Tool Calling Failed)")
+        logger.error(f"Estructura completa del error: {json.dumps(error_json, indent=2, ensure_ascii=False)}")
+        
+        # 3. Extraemos específicamente el 'failed_generation' si existe para verlo directo
+        failed_gen = error_json.get("error", {}).get("failed_generation", "No disponible")
+        logger.error(f"⚠️ Lo que el LLM intentó generar mal: {failed_gen}")
+
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "message": "Groq rechazó el formato de la herramienta",
+                "details": error_json.get("error", {})
+            }
+        )
+        
     except Exception as e:
         # rollback to avoid orfan or partial messages (review)
         await db.rollback()
-        logger.error(f"Error processing Groq interaction: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error in Groq: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 @router.get("", response_model=list[DialogResponse])
