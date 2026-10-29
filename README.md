@@ -12,8 +12,6 @@ You need to do a couple of tasks in order to locally run or develop the applicat
 
 ### Set up the Virtual Environment
 
-> Python 3.12.x should be already installed in the OS
-
 This project uses UV for virtual environment and dependency management.
 
 1. Install UV, if already installed skip.
