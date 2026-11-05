@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     # Define variables and their types (automatic validation)
     PROJECT_NAME: str
     DEBUG: bool = False
-    GROQ_MODEL: str
     LOGURU_LEVEL: str
+    GROQ_MODEL: str
     DB_NAME: str
     SHOW_SQL: bool = False
     #add more entries from .env

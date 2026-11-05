@@ -85,12 +85,17 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         if tool_calls:
             logger.info(f"Groq trying to use a tool -> tool_calls: {tool_calls}")
             
-            # 1. Adding Groq tool use request to history
-            turn_history.append(dialog_completion_message)
+            # 1. Agregar solicitud de tool call del asistente al historial en formato dict homogéneo
+            turn_history.append(dialog_completion_message.model_dump(exclude_none=True))
+            # Nota: Como alternativa, se puede construir el diccionario manualmente si en algún momento se requiere control total y exacto de cada campo que viaja a la API.
             
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
-                function_arguments = json.loads(tool_call.function.arguments)
+                try:
+                    function_arguments = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+                except Exception as ex:
+                    logger.warning(f"Failed to parse function arguments for {function_name}: {ex}")
+                    function_arguments = {}
                 
                 logger.info(f"using tool: {function_name}")
                 logger.info(f"arguments: {function_arguments}")
@@ -104,10 +109,12 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
                         duuid_str=function_arguments.get("duuid_str")
                     )
                 else:
-                    tool_result = json.dumps(
-                        {"error": f"Tool {function_name} not implemented."}
-                    )
+                    tool_result = {"error": f"Tool {function_name} not implemented."}
                     
+                # Garantizar que tool_result sea SIEMPRE un string (requisito estricto de la API de Groq/OpenAI)
+                if not isinstance(tool_result, str):
+                    tool_result = json.dumps(tool_result, ensure_ascii=False)
+
                 logger.info(f"tool_result tool: {tool_result}")
                 
                 # 3. Adding tool result to history
@@ -118,11 +125,11 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
                     "content": tool_result,
                 })
                     
-                # 4. Send everything back to Groq to get final response
-                dialog_completion = await groq_client.chat.completions.create(
-                    model=model,
-                    messages=turn_history
-                )
+            # 4. Send everything back to Groq to get final response (after processing all tool calls)
+            dialog_completion = await groq_client.chat.completions.create(
+                model=model,
+                messages=turn_history
+            )
         
         # getting the response
         assistant_message = dialog_completion.choices[0].message.content
