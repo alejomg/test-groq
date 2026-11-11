@@ -3,13 +3,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Define variables and their types (automatic validation)
+    # entries from .env
     PROJECT_NAME: str
     DEBUG: bool = False
     LOGURU_LEVEL: str
     GROQ_MODEL: str
     DB_NAME: str
+    # add more entries from .env
+
+    # entries harcoded
     SHOW_SQL: bool = False
-    #add more entries from .env
 
     # Setup to read the .env file
     model_config = SettingsConfigDict(

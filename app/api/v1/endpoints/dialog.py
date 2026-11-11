@@ -4,13 +4,14 @@ from uuid import UUID
 from fastapi import APIRouter, Request, Depends, HTTPException
 from dotenv import load_dotenv
 from loguru import logger
+
+from app.core.config import settings
 from app.db.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.dialog import Dialog, DMessage
 from app.schemas.dialog_request import DialogRequest
-from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogSimpleMessage, \
-    DialogMetadata
+from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogMetadata
 from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog, init_history_turn, get_system_prompt_message
 from app.util.tool_util import tools, get_current_datetime, get_dialog_by_uuid
 from groq import BadRequestError
@@ -20,7 +21,7 @@ router = APIRouter()
 
 load_dotenv()
 
-model = os.environ.get("GROQ_MODEL")
+model = settings.GROQ_MODEL
 
 
 @router.post("", response_model=DialogProcessedResponse)
