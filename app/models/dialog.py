@@ -87,6 +87,13 @@ class Dialog(Base):
             return (self.updated_date - self.created_date).total_seconds()
         return 0.0
 
+    @property
+    def total_messages(self) -> int:
+        """Calcula la cantidad total de mensajes asociados al diálogo."""
+        if self.messages:
+            return len(self.messages)
+        return 0
+
     async def get_messages(self, db: AsyncSession, descending: bool = False) -> List["DMessage"]:
         """
         Recupera todos los mensajes asociados a este dialog de forma asíncrona.

@@ -13,6 +13,9 @@ from app.core.logger_config import setup_logging
 from app.db.session import engine, Base
 from sqlalchemy import text
 
+from sqladmin import Admin
+from app.admin import admin_auth, DialogAdmin, DMessageAdmin
+
 load_dotenv()
 
 # starting logs
@@ -57,6 +60,16 @@ app = FastAPI(
 app.include_router(dialog.router, prefix="/api/v1/dialog", tags=["Dialog"])
 app.include_router(wikipedia.router, prefix="/api/v1/wikipedia", tags=["Wikipedia"])
 app.include_router(items.router, prefix="/api/v1/item", tags=["Item"])
+
+# Montaje del panel de administración SQLAdmin
+admin = Admin(
+    app=app,
+    engine=engine,
+    authentication_backend=admin_auth,
+    title=f"{settings.PROJECT_NAME} - Backoffice",
+)
+admin.add_view(DialogAdmin)
+admin.add_view(DMessageAdmin)
 
 
 @app.get("/")
