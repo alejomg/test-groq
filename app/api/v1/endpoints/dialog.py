@@ -12,7 +12,9 @@ from sqlalchemy import select
 from app.models.dialog import Dialog, DMessage
 from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogMetadata
-from app.util.dialog_util import get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages, get_list_of_raw_messages, get_history_turn_from_dialog, init_history_turn, get_system_prompt_message
+from app.util.dialog_util import (get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages,
+                                  get_list_of_raw_messages, get_history_turn_from_dialog)
+from app.util.prompt_util import get_system_prompt
 from app.util.tool_util import tools, get_current_datetime, get_dialog_by_uuid
 from groq import BadRequestError
 
@@ -37,7 +39,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
         dialog_sytem_prompt = DMessage.create_sytem_prompt(
             dialog_id=dialog.id,
-            text=get_system_prompt_message(),
+            text=get_system_prompt(),
         )
         db.add(dialog_sytem_prompt)
         await db.commit()
@@ -209,7 +211,7 @@ async def list_dialogs(
         db: AsyncSession = Depends(get_db)
 ):
     """
-    Recupera un listado paginado de todas las sesiones de dialogo almacenadas.
+    Recupera un listado paginado de todas las sesiones de dialog almacenadas.
     Los dialogos se devuelven ordenados por la fecha de última actualización (los más recientes primero).
     """
     # Construimos la query ordenando por la fecha de actualización de forma descendente
@@ -225,7 +227,7 @@ async def list_dialogs(
 @router.get("/{duuid}", response_model=DialogDetailResponse)
 async def get_dialog(duuid: UUID, db: AsyncSession = Depends(get_db)):
     """
-    Recupera un dialogo por su uuid.
+    Recupera un dialog por su uuid.
     """
     dialog = await Dialog.get_by_duuid(db, duuid)
 
