@@ -1,5 +1,6 @@
 import html
 from typing import Any
+from uuid import UUID
 from markupsafe import Markup
 from sqladmin import ModelView
 from sqladmin.filters import AllUniqueStringValuesFilter, ForeignKeyFilter
@@ -26,7 +27,7 @@ def format_total_messages(model: Dialog, attribute: Any) -> Markup | int:
     """
     total = len(model.messages) if model.messages else DEFAULT_MESSAGE_COUNT
     if total > ZERO_MESSAGE_THRESHOLD:
-        target_url = f"/admin/d-message/list?dialog_id={model.id}"
+        target_url = f"/admin/d-message/list?dialog_uuid={model.duuid}"
         return Markup(
             f'<a href="{target_url}" '
             f'class="fw-bold text-primary text-decoration-underline" '
@@ -87,7 +88,7 @@ def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
     """
     Formatea el UUID del diálogo como un enlace hacia su vista de detalle.
     """
-    target_url = f"/admin/dialog/details/{model.id}"
+    target_url = f"/admin/dialog/details/{model.duuid}"
     return Markup(
         f'<a href="{target_url}" '
         f'class="fw-bold text-primary text-decoration-underline" '
@@ -105,6 +106,38 @@ def format_message_text(model: DMessage, attribute: Any) -> str:
     if len(text_content) > TEXT_PREVIEW_LIMIT:
         return f"{text_content[:TEXT_PREVIEW_LIMIT]}..."
     return text_content
+
+
+def format_message_dialog(model: DMessage, attribute: Any) -> Markup:
+    """Enlaza al diálogo asociado usando su UUID público."""
+    dialog_uuid = model.dialog.duuid
+    target_url = f"/admin/dialog/details/{dialog_uuid}"
+    return Markup(
+        f'<a href="{target_url}" '
+        f'class="fw-bold text-primary text-decoration-underline" '
+        f'title="Ver detalles del diálogo">{dialog_uuid}</a>'
+    )
+
+
+class DialogUUIDFilter(ForeignKeyFilter):
+    """Filtra mensajes por el UUID público del diálogo relacionado."""
+
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str]]:
+        return [("__all", "All")] + [
+            (str(duuid), str(duuid))
+            for duuid, in await run_query(select(Dialog.duuid).distinct())
+        ]
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        if value in (None, "", "__all"):
+            return query
+        try:
+            dialog_uuid = UUID(value)
+        except (ValueError, TypeError):
+            return query.filter(False)
+        return query.join(Dialog, DMessage.dialog_id == Dialog.id).filter(
+            Dialog.duuid == dialog_uuid
+        )
 
 
 class BaseAdmin(ModelView):
@@ -212,7 +245,13 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         return select(Dialog).options(selectinload(Dialog.messages))
 
     def details_query(self, request: Request) -> select:
-        return super().details_query(request).options(selectinload(Dialog.messages))
+        identifier = request.path_params["pk"]
+        try:
+            dialog_uuid = UUID(identifier)
+        except (ValueError, TypeError):
+            # SQLAdmin usa el ID interno en la comprobación de borrado masivo.
+            return super().details_query(request).options(selectinload(Dialog.messages))
+        return select(Dialog).where(Dialog.duuid == dialog_uuid).options(selectinload(Dialog.messages))
 
     def sort_query(self, stmt: select, request: Request) -> select:
         sort_by = request.query_params.get("sortBy", None)
@@ -277,11 +316,12 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     ]
 
     column_filters = [
-        ForeignKeyFilter(
+        DialogUUIDFilter(
             foreign_key=DMessage.dialog_id,
             foreign_display_field=Dialog.id,
             foreign_model=Dialog,
             title="Diálogo",
+            parameter_name="dialog_uuid",
         ),
         AllUniqueStringValuesFilter(
             column=DMessage.type,
@@ -291,7 +331,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
 
     column_labels = {
         DMessage.id: "ID",
-        DMessage.dialog_id: "ID Diálogo",
+        DMessage.dialog_id: "UUID Diálogo",
         DMessage.type: "Tipo",
         DMessage.model: "Modelo LLM",
         DMessage.text: "Contenido",
@@ -300,5 +340,16 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     }
 
     column_formatters = {
+        DMessage.dialog_id: format_message_dialog,
         DMessage.text: format_message_text,
     }
+
+    column_formatters_detail = {
+        DMessage.dialog_id: format_message_dialog,
+    }
+
+    def list_query(self, request: Request) -> select:
+        return select(DMessage).options(selectinload(DMessage.dialog))
+
+    def details_query(self, request: Request) -> select:
+        return super().details_query(request).options(selectinload(DMessage.dialog))
