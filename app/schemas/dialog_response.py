@@ -15,6 +15,7 @@ class DialogBasicResponse(BaseResponse):
 
 
 class DialogResponse(DialogBasicResponse):
+    model: Optional[str] = None
     created_date: datetime
     updated_date: datetime
 

@@ -31,7 +31,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
     if not duuid:
         logger.info(f"starting new dialog")
-        dialog = Dialog.create_new()
+        dialog = Dialog.create_new(model_name=model)
         db.add(dialog)
         await db.commit()
 
@@ -237,6 +237,7 @@ async def get_dialog(duuid: UUID, db: AsyncSession = Depends(get_db)):
     return DialogDetailResponse(
         id=dialog.id,
         duuid=dialog.duuid,
+        model=dialog.model,
         created_date=dialog.created_date,
         updated_date=dialog.updated_date,
         messages=dialog_messages

@@ -22,6 +22,9 @@ class Dialog(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     duuid: Mapped[UUID] = mapped_column(UUID(as_uuid=True), unique=True, index=True, default=uuid.uuid4)
     
+    # Modelo LLM utilizado en este diálogo
+    model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
     # Fechas automáticas de auditoría gestionadas por el Servidor/ORM
     created_date: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_date: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
@@ -35,9 +38,9 @@ class Dialog(Base):
 
     # --- MÉTODOS DE FACTORÍA Y NEGOCIO (Rich Data Model) ---
     @classmethod
-    def create_new(cls) -> "Dialog":
+    def create_new(cls, model_name: Optional[str] = None) -> "Dialog":
         """Método de factoría para inicializar consistentemente un nuevo dialogo."""
-        return cls(duuid=uuid.uuid4(), messages=[])
+        return cls(duuid=uuid.uuid4(), model=model_name, messages=[])
         
     @classmethod
     async def get_by_duuid(cls, db: AsyncSession, duuid: UUID) -> Optional["Dialog"]:
@@ -54,6 +57,7 @@ class Dialog(Base):
         return {
             "id": self.id,
             "duuid": str(self.duuid),
+            "model": self.model,
             "created_date": self.created_date.isoformat() if self.created_date else None,
             "updated_date": self.updated_date.isoformat() if self.updated_date else None,
         }
