@@ -53,12 +53,21 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
         msg_type_str = DMessageType.get_label(msg.type)
         badge_class = DMessageType.get_badge_class(msg.type)
         escaped_text = html.escape(msg.text or "")
+        if DMessageType._get_member(msg.type) == DMessageType.SYSTEM:
+            message_content = (
+                '<details><summary class="text-primary" '
+                'style="cursor: pointer;">Mostrar mensaje de sistema</summary>'
+                f'<div style="white-space: pre-wrap; word-break: break-word;">{escaped_text}</div>'
+                '</details>'
+            )
+        else:
+            message_content = escaped_text
         row = (
             f"<tr>"
             f'<td style="width: {MESSAGES_TYPE_COLUMN_WIDTH_PX}px; vertical-align: top;">'
             f'<span class="badge {badge_class} text-white">{msg_type_str}</span>'
             f"</td>"
-            f'<td style="white-space: pre-wrap; word-break: break-word;">{escaped_text}</td>'
+            f'<td style="white-space: pre-wrap; word-break: break-word;">{message_content}</td>'
             f"</tr>"
         )
         rows_html.append(row)
@@ -316,9 +325,9 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.id,
         Dialog.duuid,
         Dialog.model,
-        "total_messages",
         Dialog.created_date,
         Dialog.updated_date,
+        "total_messages",
         "messages_table",
     ]
 
