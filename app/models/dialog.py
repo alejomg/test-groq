@@ -12,9 +12,39 @@ from app.util.prompt_util import get_system_prompt
 
 
 class DMessageType(str, enum.Enum):
-    SYSTEM = "SYSTEM"
-    USER = "USER"
-    ASSISTANT = "ASSISTANT"
+    def __new__(cls, value: str, label: str, badge_class: str):
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.label = label
+        member.badge_class = badge_class
+        return member
+
+    SYSTEM = ("SYSTEM", "SYSTEM", "bg-secondary")
+    USER = ("USER", "USER", "bg-primary")
+    ASSISTANT = ("ASSISTANT", "ASSISTANT", "bg-success")
+
+    @classmethod
+    def _get_member(cls, value: Any) -> Optional["DMessageType"]:
+        if isinstance(value, cls):
+            return value
+        normalized = str(value).rsplit(".", 1)[-1]
+        try:
+            return cls[normalized]
+        except KeyError:
+            try:
+                return cls(normalized)
+            except ValueError:
+                return None
+
+    @classmethod
+    def get_label(cls, value: Any) -> str:
+        member = cls._get_member(value)
+        return member.label if member else str(value).rsplit(".", 1)[-1]
+
+    @classmethod
+    def get_badge_class(cls, value: Any) -> str:
+        member = cls._get_member(value)
+        return member.badge_class if member else "bg-secondary"
 
 
 class DialogSource(str, enum.Enum):

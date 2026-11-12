@@ -1,10 +1,11 @@
 import html
+import json
 from typing import Any
 from uuid import UUID
 from markupsafe import Markup
 from sqladmin import ModelView
 from sqladmin.filters import AllUniqueStringValuesFilter, ForeignKeyFilter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
 
@@ -17,7 +18,7 @@ from app.admin.constants import (
     TEXT_PREVIEW_LIMIT,
     ZERO_MESSAGE_THRESHOLD,
 )
-from app.models.dialog import Dialog, DMessage
+from app.models.dialog import Dialog, DMessage, DMessageType
 
 
 def format_total_messages(model: Dialog, attribute: Any) -> Markup | int:
@@ -49,14 +50,8 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
 
     rows_html = []
     for msg in messages:
-        msg_type_str = str(msg.type.value if hasattr(msg.type, "value") else msg.type)
-        badge_class = (
-            "bg-primary"
-            if msg_type_str == "USER"
-            else "bg-success"
-            if msg_type_str == "ASSISTANT"
-            else "bg-secondary"
-        )
+        msg_type_str = DMessageType.get_label(msg.type)
+        badge_class = DMessageType.get_badge_class(msg.type)
         escaped_text = html.escape(msg.text or "")
         row = (
             f"<tr>"
@@ -84,6 +79,14 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
     )
 
 
+
+def format_dialog_model(model: Dialog, attribute: Any) -> Markup:
+    model_name = html.escape(model.model or "Ningún modelo")
+    return Markup(
+        f'<span class="badge rounded-pill bg-primary text-white" '
+        f'style="font-size: 0.7rem;">{model_name}</span>'
+    )
+
 def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
     """
     Formatea el UUID del diálogo como un enlace hacia su vista de detalle.
@@ -98,15 +101,38 @@ def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
     )
 
 
-def format_message_text(model: DMessage, attribute: Any) -> str:
-    """
-    Trunca el contenido de texto en el listado para una visualización ordenada.
-    """
+def format_message_text(model: DMessage, attribute: Any) -> str | Markup:
+    """Trunca el contenido largo y permite expandir un único mensaje."""
     text_content = model.text or ""
-    if len(text_content) > TEXT_PREVIEW_LIMIT:
-        return f"{text_content[:TEXT_PREVIEW_LIMIT]}..."
-    return text_content
+    if len(text_content) <= TEXT_PREVIEW_LIMIT:
+        return text_content
 
+    preview = html.escape(text_content[:TEXT_PREVIEW_LIMIT]) + "..."
+    full_text = html.escape(text_content)
+    content_id = f"message-content-{model.id}"
+    return Markup(
+        '<div class="message-content">'
+        f'<span class="message-content-preview">{preview}</span>'
+        f'<div id="{content_id}" class="message-content-full" '
+        'style="white-space: pre-wrap; word-break: break-word;" hidden>'
+        f'{full_text}</div>'
+        f'<button type="button" class="btn btn-link btn-sm p-0 message-content-toggle" '
+        f'aria-controls="{content_id}" aria-expanded="false">Ver completo</button>'
+        '</div>'
+    )
+
+def format_message_type(model: DMessage, attribute: Any) -> Markup:
+    message_type = DMessageType.get_label(model.type)
+    badge_class = DMessageType.get_badge_class(model.type)
+    badge_content = html.escape(message_type)
+    if message_type == DMessageType.ASSISTANT.label and model.model:
+        model_name = html.escape(model.model, quote=True)
+        return Markup(
+            f'<span class="badge {badge_class} text-white" '
+            f'title="Modelo LLM:<br><strong>{model_name}</strong>" '
+            f'data-bs-toggle="tooltip" data-bs-html="true">{badge_content}</span>'
+        )
+    return Markup(f'<span class="badge {badge_class} text-white">{badge_content}</span>')
 
 def format_message_dialog(model: DMessage, attribute: Any) -> Markup:
     """Enlaza al diálogo asociado usando su UUID público."""
@@ -121,9 +147,10 @@ def format_message_dialog(model: DMessage, attribute: Any) -> Markup:
 
 class DialogUUIDFilter(ForeignKeyFilter):
     """Filtra mensajes por el UUID público del diálogo relacionado."""
+    template = "sqladmin/filters/dialog_uuid_filter.html"
 
     async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str]]:
-        return [("__all", "All")] + [
+        return [("__all", "Todos")] + [
             (str(duuid), str(duuid))
             for duuid, in await run_query(select(Dialog.duuid).distinct())
         ]
@@ -140,6 +167,91 @@ class DialogUUIDFilter(ForeignKeyFilter):
         )
 
 
+
+class DMessageModelFilter(AllUniqueStringValuesFilter):
+    """Filtro de modelos LLM con selección múltiple."""
+    NO_MODEL_VALUE = "__no_model__"
+
+    template = "sqladmin/filters/dmessage_model_filter.html"
+
+    @staticmethod
+    def parse_values(value: str | None) -> list[str]:
+        if not value:
+            return []
+        try:
+            values = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        if not isinstance(values, list):
+            return []
+        return [item for item in values if isinstance(item, str)]
+    @classmethod
+    def display_entries(cls, values: list[str]) -> list[tuple[str, str]]:
+        return [
+            (value, "Ningún modelo" if value == cls.NO_MODEL_VALUE else value)
+            for value in values
+        ]
+
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str]]:
+        model_lookups = [
+            (value, value)
+            for value, in await run_query(
+                select(Dialog.model).where(Dialog.model.is_not(None)).distinct()
+            )
+            if value
+        ]
+        return [(self.NO_MODEL_VALUE, "Ningún modelo")] + model_lookups
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        selected_values = self.parse_values(value)
+        model_names = [
+            model_name
+            for model_name in selected_values
+            if model_name != self.NO_MODEL_VALUE
+        ]
+        include_no_model = self.NO_MODEL_VALUE in selected_values
+        if not model_names and not include_no_model:
+            return query
+        conditions = []
+        if model_names:
+            conditions.append(Dialog.model.in_(model_names))
+        if include_no_model:
+            conditions.append(Dialog.model.is_(None))
+        dialog_ids = select(Dialog.id).where(or_(*conditions))
+        return query.filter(DMessage.dialog_id.in_(dialog_ids))
+
+
+
+class DialogModelFilter(DMessageModelFilter):
+    """Aplica el filtro múltiple directamente a Dialog.model."""
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        selected_values = self.parse_values(value)
+        model_names = [
+            model_name
+            for model_name in selected_values
+            if model_name != self.NO_MODEL_VALUE
+        ]
+        include_no_model = self.NO_MODEL_VALUE in selected_values
+        if not model_names and not include_no_model:
+            return query
+        conditions = []
+        if model_names:
+            conditions.append(Dialog.model.in_(model_names))
+        if include_no_model:
+            conditions.append(Dialog.model.is_(None))
+        return query.filter(or_(*conditions))
+
+class DMessageTypeFilter(AllUniqueStringValuesFilter):
+    """Devuelve las etiquetas y colores del enum para el filtro por tipo."""
+
+    template = "sqladmin/filters/dmessage_type_filter.html"
+
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str, str]]:
+        return [
+            (message_type.value, DMessageType.get_label(message_type), DMessageType.get_badge_class(message_type))
+            for message_type in DMessageType
+        ]
 class BaseAdmin(ModelView):
     """
     Clase base para vistas administrativas con permisos restringidos:
@@ -179,6 +291,7 @@ class BaseAdmin(ModelView):
 class DialogAdmin(BaseAdmin, model=Dialog):
     name = "Diálogo"
     name_plural = "Diálogos"
+    list_template = "sqladmin/dialog_list.html"
     icon = "fa-solid fa-comments"
 
     # Creación deshabilitada para diálogos
@@ -218,7 +331,13 @@ class DialogAdmin(BaseAdmin, model=Dialog):
 
     column_searchable_list = [
         Dialog.duuid,
-        Dialog.model,
+    ]
+    column_filters = [
+        DialogModelFilter(
+            column=Dialog.model,
+            title="Modelo LLM",
+            parameter_name="dialog_models",
+        ),
     ]
 
     column_labels = {
@@ -233,13 +352,31 @@ class DialogAdmin(BaseAdmin, model=Dialog):
 
     column_formatters = {
         Dialog.duuid: format_dialog_duuid,
+        Dialog.model: format_dialog_model,
         "total_messages": format_total_messages,
     }
 
     column_formatters_detail = {
+        Dialog.model: format_dialog_model,
         "total_messages": format_total_messages,
         "messages_table": format_messages_detail_table,
     }
+
+    async def list_context(self, request: Request) -> dict[str, Any]:
+        filter_reset_url = request.url
+        for dialog_filter in self.get_filters():
+            filter_reset_url = filter_reset_url.remove_query_params(
+                dialog_filter.parameter_name
+            )
+        selected_models = DMessageModelFilter.parse_values(
+            request.query_params.get("dialog_models")
+        )
+        return {
+            "filter_reset_url": str(filter_reset_url),
+            "selected_model_pills": DMessageModelFilter.display_entries(selected_models),
+            "model_filter_parameter": "dialog_models",
+            "model_pills_removable": bool(selected_models),
+        }
 
     def list_query(self, request: Request) -> select:
         return select(Dialog).options(selectinload(Dialog.messages))
@@ -280,19 +417,21 @@ class DialogAdmin(BaseAdmin, model=Dialog):
 class DMessageAdmin(BaseAdmin, model=DMessage):
     name = "Mensaje de Diálogo"
     name_plural = "Mensajes de Diálogo"
+    list_template = "sqladmin/dmessage_list.html"
     icon = "fa-solid fa-message"
+    can_create = False
 
     page_size = DEFAULT_PAGE_SIZE
     page_size_options = PAGE_SIZE_OPTIONS
 
     column_list = [
-        DMessage.id,
         DMessage.dialog_id,
         DMessage.type,
-        DMessage.model,
         DMessage.text,
         DMessage.created_date,
     ]
+
+    column_default_sort = (DMessage.id, True)
 
     column_details_list = [
         DMessage.id,
@@ -305,14 +444,11 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     ]
 
     column_sortable_list = [
-        DMessage.id,
-        DMessage.dialog_id,
         DMessage.created_date,
     ]
 
     column_searchable_list = [
         DMessage.text,
-        DMessage.model,
     ]
 
     column_filters = [
@@ -323,7 +459,12 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
             title="Diálogo",
             parameter_name="dialog_uuid",
         ),
-        AllUniqueStringValuesFilter(
+        DMessageModelFilter(
+            column=DMessage.model,
+            title="Modelo LLM",
+            parameter_name="message_models",
+        ),
+        DMessageTypeFilter(
             column=DMessage.type,
             title="Tipo de Mensaje",
         ),
@@ -340,6 +481,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     }
 
     column_formatters = {
+        DMessage.type: format_message_type,
         DMessage.dialog_id: format_message_dialog,
         DMessage.text: format_message_text,
     }
@@ -348,8 +490,54 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.dialog_id: format_message_dialog,
     }
 
+    async def list_context(self, request: Request) -> dict[str, Any]:
+        filter_reset_url = request.url
+        for message_filter in self.get_filters():
+            filter_reset_url = filter_reset_url.remove_query_params(
+                message_filter.parameter_name
+            )
+        base_context = {"filter_reset_url": str(filter_reset_url)}
+
+        selected_dialog = None
+        dialog_uuid_value = request.query_params.get("dialog_uuid")
+        if dialog_uuid_value:
+            try:
+                dialog_uuid = UUID(dialog_uuid_value)
+            except (ValueError, TypeError):
+                dialog_uuid = None
+            if dialog_uuid is not None:
+                dialogs = await self._run_query(
+                    select(Dialog).where(Dialog.duuid == dialog_uuid)
+                )
+                selected_dialog = dialogs[0] if dialogs else None
+
+        selected_models = DMessageModelFilter.parse_values(
+            request.query_params.get("message_models")
+        )
+        if not selected_dialog and not selected_models:
+            return base_context
+
+        pill_values = selected_models
+        if not pill_values and selected_dialog:
+            pill_values = [selected_dialog.model or DMessageModelFilter.NO_MODEL_VALUE]
+        return {
+            **base_context,
+            "selected_dialog": selected_dialog,
+            "selected_models": selected_models,
+            "selected_model_pills": DMessageModelFilter.display_entries(pill_values),
+            "model_filter_parameter": "message_models",
+            "model_pills_removable": bool(selected_models),
+        }
+
     def list_query(self, request: Request) -> select:
         return select(DMessage).options(selectinload(DMessage.dialog))
 
     def details_query(self, request: Request) -> select:
         return super().details_query(request).options(selectinload(DMessage.dialog))
+
+    def sort_query(self, stmt: select, request: Request) -> select:
+        if request.query_params.get("sortBy") == "created_date":
+            if request.query_params.get("sort", "asc") == "desc":
+                return stmt.order_by(DMessage.id.desc())
+            return stmt.order_by(DMessage.id.asc())
+        return super().sort_query(stmt, request)

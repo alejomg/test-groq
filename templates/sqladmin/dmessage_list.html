@@ -1,0 +1,112 @@
+{% extends "sqladmin/list.html" %}
+
+{% block content %}
+{{ super() }}
+<script>
+  document.addEventListener("click", function (event) {
+    const button = event.target.closest(".message-content-toggle");
+    if (!button) return;
+    const shouldOpen = button.getAttribute("aria-expanded") !== "true";
+    document.querySelectorAll(".message-content-toggle[aria-expanded='true']").forEach(function (openButton) {
+      const content = openButton.closest(".message-content");
+      content.querySelector(".message-content-full").hidden = true;
+      content.querySelector(".message-content-preview").hidden = false;
+      openButton.setAttribute("aria-expanded", "false");
+      openButton.textContent = "Ver completo";
+    });
+    if (shouldOpen) {
+      const content = button.closest(".message-content");
+      content.querySelector(".message-content-preview").hidden = true;
+      content.querySelector(".message-content-full").hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      button.textContent = "Contraer";
+    }
+  });
+</script>
+<div id="filter-reset-context" hidden data-url="{{ filter_reset_url }}"></div>
+<script>
+  (() => {
+    const context = document.getElementById("filter-reset-context");
+    const filterHeader = document.querySelector("#filter-sidebar .card-header");
+    if (!context || !filterHeader) return;
+    const filterTitle = filterHeader.querySelector(".card-title");
+    if (filterTitle) filterTitle.textContent = "Filtros";
+    const resetLink = document.createElement("a");
+    resetLink.href = context.dataset.url;
+    resetLink.className = "btn btn-sm btn-link ms-auto";
+    resetLink.textContent = "Resetear todos los filtros";
+    filterHeader.appendChild(resetLink);
+  })();
+</script>
+{% if selected_dialog or selected_models %}
+<div id="selected-dialog-heading" hidden
+     data-dialog-uuid="{{ selected_dialog.duuid if selected_dialog else '' }}"
+     data-model-filter="{{ model_filter_parameter }}"
+     data-model-pills-removable="{{ 'true' if model_pills_removable else 'false' }}">
+  {% for model_value, model_label in selected_model_pills %}
+  <span class="selected-model-pill" data-model-value="{{ model_value }}" data-model-label="{{ model_label }}"></span>
+  {% endfor %}
+</div>
+<script>
+  (() => {
+    const context = document.getElementById("selected-dialog-heading");
+    const heading = document.querySelector(".card-header .card-title");
+    if (!context || !heading) return;
+    if (context.dataset.dialogUuid) {
+      heading.textContent = `${heading.textContent.trim()} - ${context.dataset.dialogUuid}`;
+    }
+    const subtitle = document.createElement("span");
+    subtitle.className = "d-block text-secondary small fw-normal mt-1";
+    const prefix = document.createElement("span");
+    prefix.className = "me-1";
+    prefix.textContent = "Modelo LLM:";
+    subtitle.appendChild(prefix);
+    const pills = document.createElement("span");
+    pills.className = "d-inline-flex flex-wrap gap-1";
+    context.querySelectorAll(".selected-model-pill").forEach(function (model) {
+      const pill = document.createElement("span");
+      pill.className = "badge rounded-pill bg-primary text-white d-inline-flex align-items-center gap-1";
+      pill.style.fontSize = "0.7rem";
+      const label = document.createElement("span");
+      label.textContent = model.dataset.modelLabel;
+      pill.appendChild(label);
+      if (context.dataset.modelPillsRemovable === "true") {
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "model-filter-pill-remove border-0 bg-transparent text-white p-0";
+        removeButton.style.fontSize = "0.85rem";
+        removeButton.style.lineHeight = "0.8";
+        removeButton.textContent = "×";
+        removeButton.setAttribute("aria-label", `Quitar filtro ${model.dataset.modelLabel}`);
+        removeButton.dataset.filterName = context.dataset.modelFilter;
+        removeButton.dataset.modelValue = model.dataset.modelValue;
+        pill.appendChild(removeButton);
+      }
+      pills.appendChild(pill);
+    });
+    subtitle.appendChild(pills);
+    heading.appendChild(subtitle);
+
+    document.addEventListener("click", function (event) {
+      const removeButton = event.target.closest(".model-filter-pill-remove");
+      if (!removeButton) return;
+      const params = new URLSearchParams(window.location.search);
+      const filterName = removeButton.dataset.filterName;
+      let selectedValues;
+      try {
+        selectedValues = JSON.parse(params.get(filterName) || "[]");
+      } catch {
+        return;
+      }
+      const remainingValues = selectedValues.filter(function (value) {
+        return value !== removeButton.dataset.modelValue;
+      });
+      if (remainingValues.length) params.set(filterName, JSON.stringify(remainingValues));
+      else params.set(filterName, "[]");
+      params.delete("page");
+      window.location.search = params.toString();
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}
