@@ -160,6 +160,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
     column_list = [
         Dialog.id,
         Dialog.duuid,
+        Dialog.model,
         "total_messages",
         Dialog.created_date,
         Dialog.updated_date,
@@ -168,6 +169,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
     column_details_list = [
         Dialog.id,
         Dialog.duuid,
+        Dialog.model,
         "total_messages",
         Dialog.created_date,
         Dialog.updated_date,
@@ -183,11 +185,13 @@ class DialogAdmin(BaseAdmin, model=Dialog):
 
     column_searchable_list = [
         Dialog.duuid,
+        Dialog.model,
     ]
 
     column_labels = {
         Dialog.id: "ID",
         Dialog.duuid: "UUID",
+        Dialog.model: "Modelo LLM",
         "total_messages": "Total Mensajes",
         Dialog.created_date: "Creado",
         Dialog.updated_date: "Actualizado",
