@@ -13,12 +13,12 @@
   {% endfor %}
   <input type="hidden" name="{{ filter.parameter_name }}" value="{{ submitted_value }}">
   <div class="d-flex flex-column gap-1" role="group" aria-label="Modelo LLM">
-    {% for value, label in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
+    {% for value, label, badge_color in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
     <label class="form-check d-flex align-items-center gap-2 mb-0">
       <input class="form-check-input model-filter-choice" type="checkbox" value="{{ value }}"
              {% if value in selected_models %}checked{% endif %}
              {% if dialog_model_locked %}disabled{% endif %}>
-      <span class="form-check-label">{{ label }}</span>
+      <span class="form-check-label"><span class="badge text-white" style="background-color: {{ badge_color }};">{{ label }}</span></span>
     </label>
     {% endfor %}
   </div>

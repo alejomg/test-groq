@@ -19,8 +19,8 @@
 </script>
 {% if selected_model_pills %}
 <div id="selected-dialog-models" hidden data-model-filter="{{ model_filter_parameter }}">
-  {% for model_value, model_label in selected_model_pills %}
-  <span class="selected-model-pill" data-model-value="{{ model_value }}" data-model-label="{{ model_label }}"></span>
+  {% for model_value, model_label, model_color in selected_model_pills %}
+  <span class="selected-model-pill" data-model-value="{{ model_value }}" data-model-label="{{ model_label }}" data-model-color="{{ model_color }}"></span>
   {% endfor %}
 </div>
 <script>
@@ -38,7 +38,8 @@
     pills.className = "d-inline-flex flex-wrap gap-1";
     context.querySelectorAll(".selected-model-pill").forEach(function (model) {
       const pill = document.createElement("span");
-      pill.className = "badge rounded-pill bg-primary text-white d-inline-flex align-items-center gap-1";
+      pill.className = "badge rounded-pill text-white d-inline-flex align-items-center gap-1";
+      pill.style.backgroundColor = model.dataset.modelColor;
       pill.style.fontSize = "0.7rem";
       const label = document.createElement("span");
       label.textContent = model.dataset.modelLabel;

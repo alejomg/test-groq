@@ -1,4 +1,5 @@
 import html
+import hashlib
 import json
 from typing import Any
 from uuid import UUID
@@ -18,7 +19,39 @@ from app.admin.constants import (
     TEXT_PREVIEW_LIMIT,
     ZERO_MESSAGE_THRESHOLD,
 )
-from app.models.dialog import Dialog, DMessage, DMessageType
+from app.models.dialog import Dialog, DialogSource, DMessage, DMessageType
+
+
+SOURCE_BADGE_COLORS = {
+    DialogSource.USER: "#6b21a8",
+    DialogSource.SYNTHETIC: "#f97316",
+}
+MODEL_BLUE_COLORS = (
+    "#0d6efd",
+    "#084298",
+    "#0b7285",
+    "#364fc7",
+    "#1864ab",
+    "#1c7ed6",
+    "#102a83",
+    "#0b5d8f",
+)
+
+
+def get_model_badge_color(model_name: str | None) -> str:
+    if not model_name:
+        return "#6c757d"
+    digest = hashlib.sha256(model_name.encode("utf-8")).digest()
+    color_index = int.from_bytes(digest[:4], "big") % len(MODEL_BLUE_COLORS)
+    return MODEL_BLUE_COLORS[color_index]
+
+
+def get_source_badge_color(source: DialogSource | str) -> str:
+    try:
+        source = DialogSource(source)
+    except ValueError:
+        return "#6c757d"
+    return SOURCE_BADGE_COLORS[source]
 
 
 def format_total_messages(model: Dialog, attribute: Any) -> Markup | int:
@@ -51,7 +84,7 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
     rows_html = []
     for msg in messages:
         msg_type_str = DMessageType.get_label(msg.type)
-        badge_class = DMessageType.get_badge_class(msg.type)
+        badge_color = DMessageType.get_badge_color(msg.type)
         escaped_text = html.escape(msg.text or "")
         if DMessageType._get_member(msg.type) == DMessageType.SYSTEM:
             message_content = (
@@ -65,7 +98,7 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
         row = (
             f"<tr>"
             f'<td style="width: {MESSAGES_TYPE_COLUMN_WIDTH_PX}px; vertical-align: top;">'
-            f'<span class="badge {badge_class} text-white">{msg_type_str}</span>'
+            f'<span class="badge text-white" style="background-color: {badge_color};">{msg_type_str}</span>'
             f"</td>"
             f'<td style="white-space: pre-wrap; word-break: break-word;">{message_content}</td>'
             f"</tr>"
@@ -90,10 +123,20 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
 
 
 def format_dialog_model(model: Dialog, attribute: Any) -> Markup:
+    badge_color = get_model_badge_color(model.model)
     model_name = html.escape(model.model or "Ningún modelo")
     return Markup(
-        f'<span class="badge rounded-pill bg-primary text-white" '
-        f'style="font-size: 0.7rem;">{model_name}</span>'
+        f'<span class="badge rounded-pill text-white" '
+        f'style="background-color: {badge_color}; font-size: 0.7rem;">{model_name}</span>'
+    )
+
+def format_dialog_source(model: Dialog, attribute: Any) -> Markup:
+    source = model.source.value if isinstance(model.source, DialogSource) else str(model.source)
+    source_label = html.escape(source)
+    badge_color = get_source_badge_color(source)
+    return Markup(
+        f'<span class="badge rounded-pill text-white" '
+        f'style="background-color: {badge_color}; font-size: 0.7rem;">{source_label}</span>'
     )
 
 def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
@@ -107,6 +150,17 @@ def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
         f'title="Ver detalles del diálogo">'
         f'{model.duuid}'
         f'</a>'
+    )
+
+
+def format_message_source(model: DMessage, attribute: Any) -> Markup:
+    source = model.dialog_source
+    source_value = source.value if isinstance(source, DialogSource) else str(source)
+    source_label = html.escape(source_value)
+    badge_color = get_source_badge_color(source_value)
+    return Markup(
+        f'<span class="badge rounded-pill text-white" style="background-color: {badge_color};">'
+        f'{source_label}</span>'
     )
 
 
@@ -132,20 +186,24 @@ def format_message_text(model: DMessage, attribute: Any) -> str | Markup:
 
 def format_message_type(model: DMessage, attribute: Any) -> Markup:
     message_type = DMessageType.get_label(model.type)
-    badge_class = DMessageType.get_badge_class(model.type)
+    badge_color = DMessageType.get_badge_color(model.type)
     badge_content = html.escape(message_type)
     if message_type == DMessageType.ASSISTANT.label and model.model:
         model_name = html.escape(model.model, quote=True)
         return Markup(
-            f'<span class="badge {badge_class} text-white" '
+            f'<span class="badge text-white" style="background-color: {badge_color};" '
             f'title="Modelo LLM:<br><strong>{model_name}</strong>" '
             f'data-bs-toggle="tooltip" data-bs-html="true">{badge_content}</span>'
         )
-    return Markup(f'<span class="badge {badge_class} text-white">{badge_content}</span>')
+    return Markup(
+        f'<span class="badge text-white" style="background-color: {badge_color};">'
+        f'{badge_content}</span>'
+    )
 
 def format_message_dialog(model: DMessage, attribute: Any) -> Markup:
     """Enlaza al diálogo asociado usando su UUID público."""
-    dialog_uuid = model.dialog.duuid
+    dialog = model.dialog
+    dialog_uuid = dialog.duuid
     target_url = f"/admin/dialog/details/{dialog_uuid}"
     return Markup(
         f'<a href="{target_url}" '
@@ -195,21 +253,25 @@ class DMessageModelFilter(AllUniqueStringValuesFilter):
             return []
         return [item for item in values if isinstance(item, str)]
     @classmethod
-    def display_entries(cls, values: list[str]) -> list[tuple[str, str]]:
+    def display_entries(cls, values: list[str]) -> list[tuple[str, str, str]]:
         return [
-            (value, "Ningún modelo" if value == cls.NO_MODEL_VALUE else value)
+            (
+                value,
+                "Ningún modelo" if value == cls.NO_MODEL_VALUE else value,
+                get_model_badge_color(None if value == cls.NO_MODEL_VALUE else value),
+            )
             for value in values
         ]
 
-    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str]]:
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str, str]]:
         model_lookups = [
-            (value, value)
+            (value, value, get_model_badge_color(value))
             for value, in await run_query(
                 select(Dialog.model).where(Dialog.model.is_not(None)).distinct()
             )
             if value
         ]
-        return [(self.NO_MODEL_VALUE, "Ningún modelo")] + model_lookups
+        return [(self.NO_MODEL_VALUE, "Sin modelo", get_model_badge_color(None))] + model_lookups
 
     async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
         selected_values = self.parse_values(value)
@@ -251,6 +313,48 @@ class DialogModelFilter(DMessageModelFilter):
             conditions.append(Dialog.model.is_(None))
         return query.filter(or_(*conditions))
 
+
+class DialogSourceFilter(AllUniqueStringValuesFilter):
+    """Filter dialogs by source with multiple selection."""
+
+    template = "sqladmin/filters/dialog_source_filter.html"
+
+    @staticmethod
+    def parse_values(value: str | None) -> list[str]:
+        if not value:
+            return []
+        try:
+            values = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        if not isinstance(values, list):
+            return []
+        valid_values = {source.value for source in DialogSource}
+        return [item for item in values if isinstance(item, str) and item in valid_values]
+
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str, str]]:
+        return [
+            (source.value, source.value, get_source_badge_color(source))
+            for source in DialogSource
+        ]
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        selected_sources = self.parse_values(value)
+        if not selected_sources:
+            return query
+        return query.filter(Dialog.source.in_(selected_sources))
+
+
+class DMessageSourceFilter(DialogSourceFilter):
+    """Filter messages by the source of their associated dialog."""
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        selected_sources = self.parse_values(value)
+        if not selected_sources:
+            return query
+        dialog_ids = select(Dialog.id).where(Dialog.source.in_(selected_sources))
+        return query.filter(DMessage.dialog_id.in_(dialog_ids))
+
 class DMessageTypeFilter(AllUniqueStringValuesFilter):
     """Devuelve las etiquetas y colores del enum para el filtro por tipo."""
 
@@ -258,7 +362,7 @@ class DMessageTypeFilter(AllUniqueStringValuesFilter):
 
     async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str, str]]:
         return [
-            (message_type.value, DMessageType.get_label(message_type), DMessageType.get_badge_class(message_type))
+            (message_type.value, DMessageType.get_label(message_type), DMessageType.get_badge_color(message_type))
             for message_type in DMessageType
         ]
 class BaseAdmin(ModelView):
@@ -316,6 +420,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.id,
         Dialog.duuid,
         Dialog.model,
+        Dialog.source,
         "total_messages",
         Dialog.created_date,
         Dialog.updated_date,
@@ -325,6 +430,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.id,
         Dialog.duuid,
         Dialog.model,
+        Dialog.source,
         Dialog.created_date,
         Dialog.updated_date,
         "total_messages",
@@ -334,6 +440,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
     # Columna ID no es ordenable
     column_sortable_list = [
         "total_messages",
+        Dialog.source,
         Dialog.created_date,
         Dialog.updated_date,
     ]
@@ -347,12 +454,18 @@ class DialogAdmin(BaseAdmin, model=Dialog):
             title="Modelo LLM",
             parameter_name="dialog_models",
         ),
+        DialogSourceFilter(
+            column=Dialog.source,
+            title="Origen",
+            parameter_name="dialog_sources",
+        ),
     ]
 
     column_labels = {
         Dialog.id: "ID",
         Dialog.duuid: "UUID",
         Dialog.model: "Modelo LLM",
+        Dialog.source: "Origen",
         "total_messages": "Total Mensajes",
         Dialog.created_date: "Creado",
         Dialog.updated_date: "Actualizado",
@@ -362,11 +475,13 @@ class DialogAdmin(BaseAdmin, model=Dialog):
     column_formatters = {
         Dialog.duuid: format_dialog_duuid,
         Dialog.model: format_dialog_model,
+        Dialog.source: format_dialog_source,
         "total_messages": format_total_messages,
     }
 
     column_formatters_detail = {
         Dialog.model: format_dialog_model,
+        Dialog.source: format_dialog_source,
         "total_messages": format_total_messages,
         "messages_table": format_messages_detail_table,
     }
@@ -435,6 +550,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
 
     column_list = [
         DMessage.dialog_id,
+        "dialog_source",
         DMessage.type,
         DMessage.text,
         DMessage.created_date,
@@ -445,6 +561,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     column_details_list = [
         DMessage.id,
         DMessage.dialog_id,
+        "dialog_source",
         DMessage.type,
         DMessage.model,
         DMessage.text,
@@ -473,6 +590,11 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
             title="Modelo LLM",
             parameter_name="message_models",
         ),
+        DMessageSourceFilter(
+            column=DMessage.dialog_id,
+            title="Origen",
+            parameter_name="dialog_sources",
+        ),
         DMessageTypeFilter(
             column=DMessage.type,
             title="Tipo de Mensaje",
@@ -484,6 +606,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.dialog_id: "UUID Diálogo",
         DMessage.type: "Tipo",
         DMessage.model: "Modelo LLM",
+        "dialog_source": "Origen",
         DMessage.text: "Contenido",
         DMessage.usage: "Uso y Tokens (JSON)",
         DMessage.created_date: "Creado",
@@ -492,11 +615,13 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     column_formatters = {
         DMessage.type: format_message_type,
         DMessage.dialog_id: format_message_dialog,
+        "dialog_source": format_message_source,
         DMessage.text: format_message_text,
     }
 
     column_formatters_detail = {
         DMessage.dialog_id: format_message_dialog,
+        "dialog_source": format_message_source,
     }
 
     async def list_context(self, request: Request) -> dict[str, Any]:

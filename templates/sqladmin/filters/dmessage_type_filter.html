@@ -1,19 +1,19 @@
 {% extends "sqladmin/filters/base_filter.html" %}
 
 {% block filter_body %}
-  {% for value, label, badge_class in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
+  {% for value, label, badge_color in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
   {% if request.query_params.get(filter.parameter_name) == value %}
   <div class="d-flex align-items-center bg-secondary-lt px-2 py-1 rounded">
     <a href="{{ request.url.remove_query_params(filter.parameter_name) }}" class="text-decoration-none me-2">
       <i class="fa-solid fa-times"></i>
     </a>
     <span class="text-truncate fw-bold text-dark">
-      {% if badge_class %}<span class="badge {{ badge_class }} text-white">{{ label }}</span>{% else %}{{ label }}{% endif %}
+      <span class="badge text-white" style="background-color: {{ badge_color }};">{{ label }}</span>
     </span>
   </div>
   {% else %}
   <a href="{{ request.url.include_query_params(**{filter.parameter_name: value}) }}" class="d-block text-decoration-none text-truncate px-2 py-1">
-    {% if badge_class %}<span class="badge {{ badge_class }} text-white">{{ label }}</span>{% else %}{{ label }}{% endif %}
+    <span class="badge text-white" style="background-color: {{ badge_color }};">{{ label }}</span>
   </a>
   {% endif %}
   {% endfor %}
