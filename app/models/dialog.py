@@ -18,7 +18,7 @@ class DMessageType(str, enum.Enum):
 
 
 class DialogSource(str, enum.Enum):
-    USER = "USER"
+    CHAT = "CHAT"
     SYNTHETIC = "SYNTHETIC"
 
 
@@ -34,8 +34,8 @@ class Dialog(Base):
     source: Mapped[DialogSource] = mapped_column(
         Enum(DialogSource, name="dialogsource"),
         nullable=False,
-        default=DialogSource.USER,
-        server_default=DialogSource.USER.value,
+        default=DialogSource.CHAT,
+        server_default=DialogSource.CHAT.value,
     )
     
     # Fechas automáticas de auditoría gestionadas por el Servidor/ORM
@@ -54,7 +54,7 @@ class Dialog(Base):
     def create_new(
         cls,
         model_name: Optional[str] = None,
-        source: DialogSource = DialogSource.USER,
+        source: DialogSource = DialogSource.CHAT,
     ) -> "Dialog":
         """Método de factoría para inicializar consistentemente un nuevo dialogo."""
         return cls(duuid=uuid.uuid4(), model=model_name, source=source, messages=[])
