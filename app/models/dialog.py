@@ -8,6 +8,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from app.db.session import Base
+from app.core.config import settings
 from app.util.prompt_util import get_system_prompt
 
 
@@ -20,6 +21,12 @@ class DMessageType(str, enum.Enum):
 class DialogSource(str, enum.Enum):
     CHAT = "CHAT"
     SYNTHETIC = "SYNTHETIC"
+
+
+class DMessageRole(str, enum.Enum):
+    NOT_SUPPORTED = "NOT_SUPPORTED"
+    TEACHER = "TEACHER"
+    STUDENT = "STUDENT"
 
 
 class Dialog(Base):
@@ -111,6 +118,12 @@ class DMessage(Base):
     
     text: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[DMessageType] = mapped_column(Enum(DMessageType), nullable=False)
+    role: Mapped[Optional[DMessageRole]] = mapped_column(
+        Enum(DMessageRole, name="messagerole"),
+        nullable=True,
+        default=DMessageRole.NOT_SUPPORTED,
+        server_default=DMessageRole.NOT_SUPPORTED.value,
+    )
     
     # Columnas específicas del LLM (Nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -130,6 +143,7 @@ class DMessage(Base):
             dialog_id=dialog_id,
             text=get_system_prompt(),
             type=DMessageType.SYSTEM,
+            role=DMessageRole.NOT_SUPPORTED,
             model=None,
             usage=None
         )
@@ -141,19 +155,33 @@ class DMessage(Base):
             dialog_id=dialog_id,
             text=text,
             type=DMessageType.USER,
+            role=DMessageRole.NOT_SUPPORTED,
             model=None,
             usage=None
         )
 
     @classmethod
-    def create_assistant_message(cls, dialog_id: int, text: str, model_name: str, usage_data: Dict[str, Any]) -> "DMessage":
+    def create_assistant_message(cls, dialog_id: int, text: str, usage_data: Dict[str, Any]) -> "DMessage":
         """Factoría especializada para respuestas generadas por el asistente (LLM)."""
         return cls(
             dialog_id=dialog_id,
             text=text,
             type=DMessageType.ASSISTANT,
-            model=model_name,
+            role=DMessageRole.NOT_SUPPORTED,
+            model=settings.GROQ_MODEL,
             usage=usage_data
+        )
+
+    @classmethod
+    def create_synthetic_message(cls, dialog_id: int, text: str, role: DMessageRole) -> "DMessage":
+        """Factoría para mensajes sintéticos con un rol obligatorio."""
+        return cls(
+            dialog_id=dialog_id,
+            text=text,
+            type=DMessageType.ASSISTANT,
+            role=role,
+            model=settings.GROQ_MODEL,
+            usage=None
         )
 
     def get_total_tokens(self) -> int:

@@ -3,7 +3,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from app.models.dialog import DialogSource
+from app.models.dialog import DialogSource, DMessageRole
 
 
 class BaseResponse(BaseModel):
@@ -25,6 +25,7 @@ class DialogResponse(DialogBasicResponse):
 class DialogSimpleMessage(BaseResponse):
     text: str
     type: str
+    role: Optional[DMessageRole] = DMessageRole.NOT_SUPPORTED
 
 
 class DialogDetailResponse(DialogResponse):

@@ -16,14 +16,15 @@ from app.util.tool_util import add_tool_results_to_turn_history, tools
 model = settings.GROQ_MODEL
 
 
-def get_raw_message_from_dmessage(dialog_message: DMessage) -> dict[str, str]:
+def get_raw_message_from_dmessage(dialog_message: DMessage) -> dict[str, Any]:
     return {
         "text": dialog_message.text,
-        "type": dialog_message.type
+        "type": dialog_message.type,
+        "role": dialog_message.role,
     }
 
 
-def get_list_of_raw_messages(dialog: Dialog) -> list[dict[str, str]]:
+def get_list_of_raw_messages(dialog: Dialog) -> list[dict[str, Any]]:
     """
     Converts a list of DMessage from a Dialog to a list of dictionaries
     :param dialog:
@@ -38,7 +39,7 @@ def get_list_of_raw_messages(dialog: Dialog) -> list[dict[str, str]]:
     ]
 
 
-def get_dialog_messages_from_raw_messages(raw_messages: list[dict[str, str]]) -> list[DialogSimpleMessage]:
+def get_dialog_messages_from_raw_messages(raw_messages: list[dict[str, Any]]) -> list[DialogSimpleMessage]:
     """
     Converts a list of dictionaries to a list of DialogSingleMessage Pydantic model
     :param raw_messages:
@@ -140,7 +141,6 @@ async def add_assistant_message_to_dialog(dialog: Dialog, dialog_completion: Cha
     assistant_dmessage = DMessage.create_assistant_message(
         dialog_id=dialog.id,
         text=assistant_message,
-        model_name=model,
         usage_data=usage,
     )
 
