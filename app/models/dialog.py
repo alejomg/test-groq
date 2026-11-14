@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import ForeignKey, String, Text, UUID, Enum, JSON, func, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, selectinload
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from app.db.session import Base
+from app.util.prompt_util import get_system_prompt
 
 
 class DMessageType(str, enum.Enum):
@@ -106,11 +107,11 @@ class DMessage(Base):
     # --- MÉTODOS DE FACTORÍA Y EXTRACTORES (Rich Data Model) ---
 
     @classmethod
-    def create_sytem_prompt(cls, dialog_id: int, text: str) -> "DMessage":
-        """Factoría especializada para el system prompt."""
+    def create_system_initial_message(cls, dialog_id: int) -> "DMessage":
+        """Factoría especializada para el system initial message."""
         return cls(
             dialog_id=dialog_id,
-            text=text,
+            text=get_system_prompt(),
             type=DMessageType.SYSTEM,
             model=None,
             usage=None

@@ -1,4 +1,3 @@
-import os
 import json
 from uuid import UUID
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -13,9 +12,9 @@ from app.models.dialog import Dialog, DMessage
 from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogMetadata
 from app.util.dialog_util import (get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages,
-                                  get_list_of_raw_messages, get_history_turn_from_dialog)
-from app.util.prompt_util import get_system_prompt
-from app.util.tool_util import tools, get_current_datetime, get_dialog_by_uuid
+                                  get_list_of_raw_messages, get_history_turn_from_dialog, acquire_dialog,
+                                  add_user_message_to_dialog, process_tool_calls, add_assistant_message_to_dialog,
+                                  sending_user_message)
 from groq import BadRequestError
 
 
@@ -28,131 +27,39 @@ model = settings.GROQ_MODEL
 
 @router.post("", response_model=DialogProcessedResponse)
 async def request_dialog(request: Request, dialog_request: DialogRequest, db: AsyncSession = Depends(get_db)):
+
     duuid = dialog_request.duuid
     user_message = dialog_request.message
 
-    if not duuid:
-        logger.info(f"starting new dialog")
-        dialog = Dialog.create_new(model_name=model)
-        db.add(dialog)
-        await db.commit()
+    # 1 adquirimos un dialog nuevo o existente
+    dialog = await acquire_dialog(duuid, db)
 
-        dialog_sytem_prompt = DMessage.create_sytem_prompt(
-            dialog_id=dialog.id,
-            text=get_system_prompt(),
-        )
-        db.add(dialog_sytem_prompt)
-        await db.commit()
-        
-        await db.refresh(dialog, attribute_names=["messages"])
-        
-        logger.info(f"new dialog: {dialog.duuid}")
-        
-    else:
-        logger.info(f"getting dialog: {duuid}")
-        dialog = await Dialog.get_by_duuid(db, duuid)
+    # 2 guardamos en DB el mensaje recibido del usuario
+    user_dmessage = await add_user_message_to_dialog(dialog, user_message, db)
 
-        if not dialog:
-            raise HTTPException(status_code=404, detail="Dialog not found")
-            
-        logger.info(f"found dialog: {duuid}")
+    # 3 sacamos la historia del dialog, si es nueva solo tiene el mensaje de sistema y el de usuario
+    # si es existente, tiene un historial de mensajes, y el último siempre es del usuario
+    turn_history = await get_history_turn_from_dialog(dialog.duuid, db)
 
-    turn_history = get_history_turn_from_dialog(dialog)
-    turn_history.append({"role": "user", "content": user_message})
-    
     # recovering the Groq client from the 'state'
     groq_client = request.app.state.groq_client
 
-    # sending the request to groq
     try:
-        logger.info(f"sending request: {turn_history}")
-        dialog_completion = await groq_client.chat.completions.create(
-            messages=turn_history,
-            model=model,
-            tools=tools,
-            tool_choice="auto"
-        )
-        logger.info(f"got response: {dialog_completion}")
+        # 4 sending the user message to groq along with the turn_history
+        dialog_completion = await sending_user_message(turn_history, groq_client)
 
-        dialog_user_message = DMessage.create_user_message(
-            dialog_id=dialog.id,
-            text=user_message,
-        )
-        db.add(dialog_user_message)
+        # 5 if any tool call request, processing them and sending results back to the assistant (groq) for final
+        dialog_completion, turn_history = await process_tool_calls(dialog_completion, turn_history, groq_client, db)
 
-        dialog_completion_message = dialog_completion.choices[0].message
-        logger.info(f"****** {user_message}")
-        logger.info(f"****** {dialog_completion_message}")
+        # 6 guardamos en DB el mensaje recibido del asistente (groq)
+        assistant_dmessage = await add_assistant_message_to_dialog(dialog, dialog_completion, db)
         
-        tool_calls = dialog_completion_message.tool_calls
-        if tool_calls:
-            logger.info(f"Groq trying to use a tool -> tool_calls: {tool_calls}")
-            
-            # 1. Agregar solicitud de tool call del asistente al historial en formato dict homogéneo
-            turn_history.append(dialog_completion_message.model_dump(exclude_none=True))
-            # Nota: Como alternativa, se puede construir el diccionario manualmente si en algún momento se requiere control total y exacto de cada campo que viaja a la API.
-            
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                try:
-                    function_arguments = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
-                except Exception as ex:
-                    logger.warning(f"Failed to parse function arguments for {function_name}: {ex}")
-                    function_arguments = {}
-                
-                logger.info(f"using tool: {function_name}")
-                logger.info(f"arguments: {function_arguments}")
-                
-                # 2. logic to choose function to use
-                if function_name == "get_current_datetime":
-                    tool_result = get_current_datetime()
-                elif function_name == "get_dialog_by_uuid":
-                    tool_result = await get_dialog_by_uuid(
-                        db=db, 
-                        duuid_str=function_arguments.get("duuid_str")
-                    )
-                else:
-                    tool_result = {"error": f"Tool {function_name} not implemented."}
-                    
-                # Garantizar que tool_result sea SIEMPRE un string (requisito estricto de la API de Groq/OpenAI)
-                if not isinstance(tool_result, str):
-                    tool_result = json.dumps(tool_result, ensure_ascii=False)
-
-                logger.info(f"tool_result tool: {tool_result}")
-                
-                # 3. Adding tool result to history
-                turn_history.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": tool_result,
-                })
-                    
-            # 4. Send everything back to Groq to get final response (after processing all tool calls)
-            dialog_completion = await groq_client.chat.completions.create(
-                model=model,
-                messages=turn_history
-            )
-        
-        # getting the response
-        assistant_message = dialog_completion.choices[0].message.content
-
         # Passes Groq's exact token usage object smoothly
         usage = dialog_completion.usage.model_dump() if dialog_completion.usage else None
 
-        dialog_assistant_message = DMessage.create_assistant_message(
-            dialog_id=dialog.id,
-            text=assistant_message,
-            model_name=model,
-            usage_data=usage,
-        )
-        db.add(dialog_assistant_message)
-
-        await db.commit()
-
         raw_messages = [
-            get_raw_message_from_dmessage(dialog_user_message),
-            get_raw_message_from_dmessage(dialog_assistant_message)
+            get_raw_message_from_dmessage(user_dmessage),
+            get_raw_message_from_dmessage(assistant_dmessage)
         ]
 
         dialog_messages = get_dialog_messages_from_raw_messages(raw_messages)
