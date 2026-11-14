@@ -23,7 +23,7 @@ from app.models.dialog import Dialog, DialogSource, DMessage, DMessageType
 
 
 SOURCE_BADGE_COLORS = {
-    DialogSource.USER: "#6b21a8",
+    DialogSource.CHAT: "#6b21a8",
     DialogSource.SYNTHETIC: "#f97316",
 }
 MODEL_BLUE_COLORS = (
