@@ -19,7 +19,7 @@ from app.admin.constants import (
     TEXT_PREVIEW_LIMIT,
     ZERO_MESSAGE_THRESHOLD,
 )
-from app.models.dialog import Dialog, DialogSource, DMessage, DMessageType
+from app.models.dialog import Dialog, DialogSource, DMessage, DMessageRole, DMessageType
 
 
 SOURCE_BADGE_COLORS = {
@@ -36,6 +36,16 @@ MODEL_BLUE_COLORS = (
     "#102a83",
     "#0b5d8f",
 )
+MESSAGE_ROLE_BADGE_COLORS = {
+    DMessageRole.NOT_SUPPORTED: "#6c757d",
+    DMessageRole.TEACHER: "#526b00",
+    DMessageRole.STUDENT: "#748f00",
+}
+MESSAGE_ROLE_LABELS = {
+    DMessageRole.NOT_SUPPORTED: "Sin rol",
+    DMessageRole.TEACHER: DMessageRole.TEACHER.value,
+    DMessageRole.STUDENT: DMessageRole.STUDENT.value,
+}
 
 
 def get_model_badge_color(model_name: str | None) -> str:
@@ -52,6 +62,15 @@ def get_source_badge_color(source: DialogSource | str) -> str:
     except ValueError:
         return "#6c757d"
     return SOURCE_BADGE_COLORS[source]
+
+
+def get_message_role_badge_color(role: DMessageRole | str | None) -> str:
+    if role is None:
+        return "#6c757d"
+    try:
+        return MESSAGE_ROLE_BADGE_COLORS[DMessageRole(role)]
+    except ValueError:
+        return "#6c757d"
 
 
 def format_total_messages(model: Dialog, attribute: Any) -> Markup | int:
@@ -82,9 +101,10 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
         return Markup('<span class="text-muted">Sin mensajes asociados</span>')
 
     rows_html = []
-    for msg in messages:
+    for index, msg in enumerate(messages):
         msg_type_str = DMessageType.get_label(msg.type)
         badge_color = DMessageType.get_badge_color(msg.type)
+        row_background = "#f8fafc" if index % 2 == 0 else "#eaf0f6"
         escaped_text = html.escape(msg.text or "")
         if DMessageType._get_member(msg.type) == DMessageType.SYSTEM:
             message_content = (
@@ -95,12 +115,27 @@ def format_messages_detail_table(model: Dialog, attribute: Any) -> Markup:
             )
         else:
             message_content = escaped_text
+        role_value = msg.role.value if isinstance(msg.role, DMessageRole) else msg.role
+        role_badge = ""
+        if role_value and role_value != DMessageRole.NOT_SUPPORTED.value:
+            role = DMessageRole(role_value)
+            role_label = html.escape(MESSAGE_ROLE_LABELS[role])
+            role_color = get_message_role_badge_color(role)
+            role_badge = (
+                f'<br><span class="badge rounded-pill text-white mt-1" '
+                f'style="background-color: {role_color};">{role_label}</span>'
+            )
         row = (
             f"<tr>"
-            f'<td style="width: {MESSAGES_TYPE_COLUMN_WIDTH_PX}px; vertical-align: top;">'
+            f'<td style="width: {MESSAGES_TYPE_COLUMN_WIDTH_PX}px; vertical-align: top; '
+            f'background-color: {row_background}; border-bottom: 2px solid #cbd5e1; '
+            f'padding-top: 0.7rem; padding-bottom: 0.7rem;">'
             f'<span class="badge text-white" style="background-color: {badge_color};">{msg_type_str}</span>'
+            f'{role_badge}'
             f"</td>"
-            f'<td style="white-space: pre-wrap; word-break: break-word;">{message_content}</td>'
+            f'<td style="white-space: pre-wrap; word-break: break-word; '
+            f'background-color: {row_background}; border-bottom: 2px solid #cbd5e1; '
+            f'padding-top: 0.7rem; padding-bottom: 0.7rem;">{message_content}</td>'
             f"</tr>"
         )
         rows_html.append(row)
@@ -139,17 +174,75 @@ def format_dialog_source(model: Dialog, attribute: Any) -> Markup:
         f'style="background-color: {badge_color}; font-size: 0.7rem;">{source_label}</span>'
     )
 
+def format_dialog_roles(model: Dialog, attribute: Any) -> Markup:
+    source = model.source.value if isinstance(model.source, DialogSource) else model.source
+    if source != DialogSource.SYNTHETIC.value:
+        return Markup('<span class="text-muted">—</span>')
+
+    messages = sorted(model.messages or [], key=lambda message: message.id or 0)
+    role_order = []
+    system_roles = []
+    for message in messages:
+        if message.role is None:
+            continue
+        try:
+            role = message.role if isinstance(message.role, DMessageRole) else DMessageRole(message.role)
+        except ValueError:
+            continue
+        if role == DMessageRole.NOT_SUPPORTED:
+            continue
+
+        message_roles = (
+            system_roles
+            if DMessageType._get_member(message.type) == DMessageType.SYSTEM
+            else role_order
+        )
+        if role not in message_roles:
+            message_roles.append(role)
+
+    role_order.extend(role for role in system_roles if role not in role_order)
+
+    role_badges = []
+    for role in role_order:
+        role_label = html.escape(MESSAGE_ROLE_LABELS[role])
+        role_color = get_message_role_badge_color(role)
+        role_badges.append(
+            f'<span class="badge rounded-pill text-white me-1" '
+            f'style="background-color: {role_color};">{role_label}</span>'
+        )
+
+    return Markup("".join(role_badges) or '<span class="text-muted">—</span>')
+
+
+def format_dialog_roles_detail(model: Dialog, attribute: Any) -> Markup:
+    formatted_roles = format_dialog_roles(model, attribute)
+    if "badge" not in formatted_roles:
+        return Markup("")
+    return formatted_roles
+
+
 def format_dialog_duuid(model: Dialog, attribute: Any) -> Markup:
     """
     Formatea el UUID del diálogo como un enlace hacia su vista de detalle.
     """
-    target_url = f"/admin/dialog/details/{model.duuid}"
+    uuid_text = str(model.duuid)
+    target_url = f"/admin/dialog/details/{uuid_text}"
     return Markup(
         f'<a href="{target_url}" '
         f'class="fw-bold text-primary text-decoration-underline" '
         f'title="Ver detalles del diálogo">'
-        f'{model.duuid}'
+        f'{html.escape(uuid_text)}'
         f'</a>'
+    )
+
+
+def format_dialog_duuid_detail(model: Dialog, attribute: Any) -> Markup:
+    uuid_text = str(model.duuid)
+    target_url = f"/admin/dialog/details/{uuid_text}"
+    return Markup(
+        f'<a href="{target_url}" '
+        f'class="fw-bold text-primary text-decoration-underline" '
+        f'title="{html.escape(uuid_text, quote=True)}">{html.escape(uuid_text)}</a>'
     )
 
 
@@ -161,6 +254,30 @@ def format_message_source(model: DMessage, attribute: Any) -> Markup:
     return Markup(
         f'<span class="badge rounded-pill text-white" style="background-color: {badge_color};">'
         f'{source_label}</span>'
+    )
+
+
+def format_message_role(model: DMessage, attribute: Any) -> Markup:
+    role = model.role.value if isinstance(model.role, DMessageRole) else model.role
+    if role == DMessageRole.NOT_SUPPORTED.value:
+        return Markup("")
+    role_label = MESSAGE_ROLE_LABELS.get(role, role or "")
+    badge_color = get_message_role_badge_color(role)
+    return Markup(
+        f'<span class="badge rounded-pill text-white" style="background-color: {badge_color};">'
+        f'{html.escape(role_label)}</span>'
+    )
+
+
+def format_message_role_detail(model: DMessage, attribute: Any) -> Markup:
+    role = model.role.value if isinstance(model.role, DMessageRole) else model.role
+    if role in (None, DMessageRole.NOT_SUPPORTED.value):
+        return Markup("")
+    role_label = MESSAGE_ROLE_LABELS.get(role, role)
+    badge_color = get_message_role_badge_color(role)
+    return Markup(
+        f'<span class="badge rounded-pill text-white" style="background-color: {badge_color};">'
+        f'{html.escape(role_label)}</span>'
     )
 
 
@@ -203,12 +320,23 @@ def format_message_type(model: DMessage, attribute: Any) -> Markup:
 def format_message_dialog(model: DMessage, attribute: Any) -> Markup:
     """Enlaza al diálogo asociado usando su UUID público."""
     dialog = model.dialog
-    dialog_uuid = dialog.duuid
+    dialog_uuid = str(dialog.duuid)
+    visible_uuid = "-".join(dialog_uuid.split("-")[:3]) + "-..."
     target_url = f"/admin/dialog/details/{dialog_uuid}"
     return Markup(
         f'<a href="{target_url}" '
         f'class="fw-bold text-primary text-decoration-underline" '
-        f'title="Ver detalles del diálogo">{dialog_uuid}</a>'
+        f'title="{html.escape(dialog_uuid, quote=True)}">{html.escape(visible_uuid)}</a>'
+    )
+
+
+def format_message_dialog_detail(model: DMessage, attribute: Any) -> Markup:
+    dialog_uuid = str(model.dialog.duuid)
+    target_url = f"/admin/dialog/details/{dialog_uuid}"
+    return Markup(
+        f'<a href="{target_url}" '
+        f'class="fw-bold text-primary text-decoration-underline" '
+        f'title="{html.escape(dialog_uuid, quote=True)}">{html.escape(dialog_uuid)}</a>'
     )
 
 
@@ -365,6 +493,40 @@ class DMessageTypeFilter(AllUniqueStringValuesFilter):
             (message_type.value, DMessageType.get_label(message_type), DMessageType.get_badge_color(message_type))
             for message_type in DMessageType
         ]
+
+
+class DMessageRoleFilter(AllUniqueStringValuesFilter):
+    """Filter messages by one or more roles."""
+
+    template = "sqladmin/filters/dmessage_role_filter.html"
+
+    @staticmethod
+    def parse_values(value: str | None) -> list[str]:
+        if not value:
+            return []
+        try:
+            values = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        if not isinstance(values, list):
+            return []
+        valid_values = {role.value for role in DMessageRole}
+        return [item for item in values if isinstance(item, str) and item in valid_values]
+
+    async def lookups(self, request: Request, model: Any, run_query: Any) -> list[tuple[str, str, str]]:
+        role_lookups = [
+            (role.value, MESSAGE_ROLE_LABELS[role], get_message_role_badge_color(role))
+            for role in DMessageRole
+        ]
+        return role_lookups
+
+    async def get_filtered_query(self, query: select, value: Any, model: Any) -> select:
+        selected_values = self.parse_values(value)
+        if not selected_values:
+            return query
+        return query.filter(DMessage.role.in_(selected_values))
+
+
 class BaseAdmin(ModelView):
     """
     Clase base para vistas administrativas con permisos restringidos:
@@ -421,6 +583,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.duuid,
         Dialog.model,
         Dialog.source,
+        "roles",
         "total_messages",
         Dialog.created_date,
         Dialog.updated_date,
@@ -431,6 +594,7 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.duuid,
         Dialog.model,
         Dialog.source,
+        "roles",
         Dialog.created_date,
         Dialog.updated_date,
         "total_messages",
@@ -466,7 +630,8 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.duuid: "UUID",
         Dialog.model: "Modelo LLM",
         Dialog.source: "Origen",
-        "total_messages": "Total Mensajes",
+        "roles": "Roles",
+        "total_messages": "Mensajes",
         Dialog.created_date: "Creado",
         Dialog.updated_date: "Actualizado",
         "messages_table": "Mensajes Asociados",
@@ -476,12 +641,15 @@ class DialogAdmin(BaseAdmin, model=Dialog):
         Dialog.duuid: format_dialog_duuid,
         Dialog.model: format_dialog_model,
         Dialog.source: format_dialog_source,
+        "roles": format_dialog_roles,
         "total_messages": format_total_messages,
     }
 
     column_formatters_detail = {
+        Dialog.duuid: format_dialog_duuid_detail,
         Dialog.model: format_dialog_model,
         Dialog.source: format_dialog_source,
+        "roles": format_dialog_roles_detail,
         "total_messages": format_total_messages,
         "messages_table": format_messages_detail_table,
     }
@@ -552,6 +720,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.dialog_id,
         "dialog_source",
         DMessage.type,
+        DMessage.role,
         DMessage.text,
         DMessage.created_date,
     ]
@@ -563,6 +732,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.dialog_id,
         "dialog_source",
         DMessage.type,
+        DMessage.role,
         DMessage.model,
         DMessage.text,
         DMessage.usage,
@@ -570,6 +740,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
     ]
 
     column_sortable_list = [
+        DMessage.dialog_id,
         DMessage.created_date,
     ]
 
@@ -595,6 +766,11 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
             title="Origen",
             parameter_name="dialog_sources",
         ),
+        DMessageRoleFilter(
+            column=DMessage.role,
+            title="Rol",
+            parameter_name="message_roles",
+        ),
         DMessageTypeFilter(
             column=DMessage.type,
             title="Tipo de Mensaje",
@@ -607,6 +783,7 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.type: "Tipo",
         DMessage.model: "Modelo LLM",
         "dialog_source": "Origen",
+        DMessage.role: "Rol",
         DMessage.text: "Contenido",
         DMessage.usage: "Uso y Tokens (JSON)",
         DMessage.created_date: "Creado",
@@ -616,12 +793,14 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         DMessage.type: format_message_type,
         DMessage.dialog_id: format_message_dialog,
         "dialog_source": format_message_source,
+        DMessage.role: format_message_role,
         DMessage.text: format_message_text,
     }
 
     column_formatters_detail = {
-        DMessage.dialog_id: format_message_dialog,
+        DMessage.dialog_id: format_message_dialog_detail,
         "dialog_source": format_message_source,
+        DMessage.role: format_message_role_detail,
     }
 
     async def list_context(self, request: Request) -> dict[str, Any]:
@@ -670,6 +849,13 @@ class DMessageAdmin(BaseAdmin, model=DMessage):
         return super().details_query(request).options(selectinload(DMessage.dialog))
 
     def sort_query(self, stmt: select, request: Request) -> select:
+        if request.query_params.get("dialog_uuid") and not request.query_params.get("sortBy"):
+            return stmt.order_by(DMessage.id.asc())
+        if request.query_params.get("sortBy") == "dialog_id":
+            stmt = stmt.join(Dialog, DMessage.dialog_id == Dialog.id)
+            if request.query_params.get("sort", "asc") == "desc":
+                return stmt.order_by(Dialog.duuid.desc(), DMessage.id.desc())
+            return stmt.order_by(Dialog.duuid.asc(), DMessage.id.desc())
         if request.query_params.get("sortBy") == "created_date":
             if request.query_params.get("sort", "asc") == "desc":
                 return stmt.order_by(DMessage.id.desc())

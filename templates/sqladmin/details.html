@@ -7,9 +7,12 @@
       <h3 class="card-title">
         {% if model.duuid is defined %}
         <strong>{{ model.duuid }}</strong>
-        <span class="d-block text-secondary small fw-normal mt-1">
-          <span class="me-1">Modelo LLM:</span>
+        {% set source_value, source_pill = model_view.get_detail_value(model, "source", request) %}
+        {% set roles_value, roles_pills = model_view.get_detail_value(model, "roles", request) %}
+        <span class="d-flex flex-wrap align-items-center gap-1 text-secondary small fw-normal mt-1">
           <span class="badge rounded-pill bg-primary text-white" style="font-size: 0.7rem;">{{ model.model or "Ningún modelo" }}</span>
+          {{ source_pill }}
+          {% if roles_pills %}{{ roles_pills }}{% endif %}
         </span>
         {% else %}
         <strong>{{ get_object_identifier(model) }}</strong>
@@ -22,21 +25,48 @@
         <table class="table card-table table-vcenter table-hover table-bordered w-100">
           <thead>
             <tr>
+              {% if model.duuid is defined %}
+              <th>ID</th>
+              <th>Creado</th>
+              <th>Actualizado</th>
+              {% else %}
               <th style="width: 160px; max-width: 180px; white-space: nowrap;"></th>
               <th>{{ _("Value") }}</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
-            {% for name in model_view._details_prop_names %}
-            {% if not (model.duuid is defined and name in ("duuid", "model")) %}
-            {% set label = model_view._column_labels.get(name, name) %}
+            {% if model.duuid is defined %}
+            {% set created_value, created_formatted_value = model_view.get_detail_value(model, "created_date", request) %}
+            {% set updated_value, updated_formatted_value = model_view.get_detail_value(model, "updated_date", request) %}
             <tr>
-              <td class="text-secondary fw-semibold text-nowrap" style="width: 160px; max-width: 180px; vertical-align: top;">{{ label }}</td>
-              {% set value, formatted_value = model_view.get_detail_value(model, name, request) %}
+              <td>{{ model.id }}</td>
+              <td>{{ created_formatted_value }}</td>
+              <td>{{ updated_formatted_value }}</td>
+            </tr>
+            {% endif %}
+            {% for name in model_view._details_prop_names %}
+            {% if model.duuid is defined and name in ("id", "duuid", "model", "source", "roles", "created_date", "updated_date", "total_messages") %}
+            {% elif not (model.duuid is defined and name in ("duuid", "model")) %}
+            {% set label = model_view._column_labels.get(name, name) %}
+            {% set value, formatted_value = model_view.get_detail_value(model, name, request) %}
+            {% if name != "roles" or formatted_value %}
+            <tr>
+              <td class="text-secondary fw-semibold text-nowrap" style="width: 160px; max-width: 180px; vertical-align: top;">
+                {{ label }}
+                {% if model.duuid is defined and name == "messages_table" %}
+                {% set message_count = model.messages|length %}
+                {% if message_count > 0 %}
+                <a href="/admin/d-message/list?dialog_uuid={{ model.duuid }}">[{{ message_count }}]</a>
+                {% else %}
+                [{{ message_count }}]
+                {% endif %}
+                {% endif %}
+              </td>
               {% set render_as_link = name not in model_view._non_link_related_fields %}
               {% if name in model_view._relation_names %}
               {% if is_list( value ) %}
-              <td style="word-break: break-word;">
+              <td style="word-break: break-word;"{% if model.duuid is defined %} colspan="2"{% endif %}>
                 {% for elem, formatted_elem in zip(value, formatted_value) %}
                 {% if render_as_link and model_view.show_compact_lists %}
                 <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
@@ -51,16 +81,17 @@
               </td>
               {% else %}
               {% if render_as_link %}
-              <td style="word-break: break-word;"><a href="{{ model_view._url_for_details_with_prop(request, model, name) }}">{{ formatted_value }}</a>
+              <td style="word-break: break-word;"{% if model.duuid is defined %} colspan="2"{% endif %}><a href="{{ model_view._url_for_details_with_prop(request, model, name) }}">{{ formatted_value }}</a>
               </td>
               {% else %}
-              <td style="word-break: break-word;">{{ formatted_value }}</td>
+              <td style="word-break: break-word;"{% if model.duuid is defined %} colspan="2"{% endif %}>{{ formatted_value }}</td>
               {% endif %}
               {% endif %}
               {% else %}
-              <td style="word-break: break-word; white-space: normal;">{{ formatted_value }}</td>
+              <td style="word-break: break-word; white-space: normal;"{% if model.duuid is defined %} colspan="2"{% endif %}>{{ formatted_value }}</td>
               {% endif %}
             </tr>
+            {% endif %}
             {% endif %}
             {% endfor %}
           </tbody>

@@ -11,7 +11,7 @@ TEXT_PREVIEW_LIMIT = 80
 DEFAULT_MESSAGE_COUNT = 0
 
 # Altura máxima del contenedor de mensajes
-MESSAGES_TABLE_MAX_HEIGHT_PX = 360
+MESSAGES_TABLE_MAX_HEIGHT_PX = 520
 
 # Ancho fijo para columna de tipo
 MESSAGES_TYPE_COLUMN_WIDTH_PX = 120

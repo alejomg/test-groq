@@ -8,13 +8,14 @@ from app.core.config import settings
 from app.db.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.dialog import Dialog, DMessage
+from app.models.dialog import Dialog, DMessageRole
 from app.schemas.dialog_request import DialogRequest
 from app.schemas.dialog_response import DialogResponse, DialogDetailResponse, DialogProcessedResponse, DialogMetadata
 from app.util.dialog_util import (get_raw_message_from_dmessage, get_dialog_messages_from_raw_messages,
-                                  get_list_of_raw_messages, get_history_turn_from_dialog, acquire_dialog,
+                                  get_list_of_raw_messages, get_turn_history_from_dialog, acquire_dialog,
                                   add_user_message_to_dialog, process_tool_calls, add_assistant_message_to_dialog,
-                                  sending_user_message)
+                                  sending_turn_history)
+from app.util.synt_util import start_synthetic_dialog
 from groq import BadRequestError
 
 
@@ -23,6 +24,12 @@ router = APIRouter()
 load_dotenv()
 
 model = settings.GROQ_MODEL
+
+
+@router.post("/synthetic")
+async def request_synthetic_dialog(request: Request, db: AsyncSession = Depends(get_db)):
+    await start_synthetic_dialog(request, db)
+    return {"status": "completed"}
 
 
 @router.post("", response_model=DialogProcessedResponse)
@@ -39,24 +46,21 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
     # 3 sacamos la historia del dialog, si es nueva solo tiene el mensaje de sistema y el de usuario
     # si es existente, tiene un historial de mensajes, y el último siempre es del usuario
-    turn_history = await get_history_turn_from_dialog(dialog.duuid, db)
+    turn_history = await get_turn_history_from_dialog(dialog.duuid, db)
 
     # recovering the Groq client from the 'state'
     groq_client = request.app.state.groq_client
 
     try:
-        # 4 sending the user message to groq along with the turn_history
-        dialog_completion = await sending_user_message(turn_history, groq_client)
+        # 4 sending turn_history with the last the user message to groq along with the turn_history
+        dialog_completion = await sending_turn_history(turn_history, groq_client)
 
         # 5 if any tool call request, processing them and sending results back to the assistant (groq) for final
         dialog_completion, turn_history = await process_tool_calls(dialog_completion, turn_history, groq_client, db)
 
         # 6 guardamos en DB el mensaje recibido del asistente (groq)
-        assistant_dmessage = await add_assistant_message_to_dialog(dialog, dialog_completion, db)
+        assistant_dmessage = await add_assistant_message_to_dialog(dialog, dialog_completion, DMessageRole.NOT_SUPPORTED, db)
         
-        # Passes Groq's exact token usage object smoothly
-        usage = dialog_completion.usage.model_dump() if dialog_completion.usage else None
-
         raw_messages = [
             get_raw_message_from_dmessage(user_dmessage),
             get_raw_message_from_dmessage(assistant_dmessage)
@@ -66,7 +70,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
 
         dialog_metadata = DialogMetadata(
                 model=model,
-                usage=usage
+                usage=assistant_dmessage.usage
         )
 
         return DialogProcessedResponse(

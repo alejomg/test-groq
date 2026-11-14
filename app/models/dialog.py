@@ -182,7 +182,19 @@ class DMessage(Base):
         """Factoría especializada para el system initial message."""
         return cls(
             dialog_id=dialog_id,
-            text=get_system_prompt(),
+            text=get_system_prompt(DMessageRole.NOT_SUPPORTED),
+            type=DMessageType.SYSTEM,
+            role=DMessageRole.NOT_SUPPORTED,
+            model=None,
+            usage=None
+        )
+
+    @classmethod
+    def create_synthetic_initial_message(cls, dialog_id: int, role: DMessageRole) -> "DMessage":
+        """Create a system message using the role-specific prompt, stored as NOT_SUPPORTED."""
+        return cls(
+            dialog_id=dialog_id,
+            text=get_system_prompt(role),
             type=DMessageType.SYSTEM,
             role=DMessageRole.NOT_SUPPORTED,
             model=None,
@@ -202,6 +214,18 @@ class DMessage(Base):
         )
 
     @classmethod
+    def create_synthetic_user_message(cls, dialog_id: int, text: str, role: DMessageRole) -> "DMessage":
+        """Factory for synthetic incoming messages with a required role."""
+        return cls(
+            dialog_id=dialog_id,
+            text=text,
+            type=DMessageType.USER,
+            role=role,
+            model=None,
+            usage=None
+        )
+
+    @classmethod
     def create_assistant_message(cls, dialog_id: int, text: str, usage_data: Dict[str, Any]) -> "DMessage":
         """Factoría especializada para respuestas generadas por el asistente (LLM)."""
         return cls(
@@ -214,15 +238,16 @@ class DMessage(Base):
         )
 
     @classmethod
-    def create_synthetic_message(cls, dialog_id: int, text: str, role: DMessageRole) -> "DMessage":
-        """Factoría para mensajes sintéticos con un rol obligatorio."""
+    def create_synthetic_message(cls, dialog_id: int, text: str, type: DMessageType, role: DMessageRole,
+                                 usage_data: Dict[str, Any]) -> "DMessage":
+        """Factoría para mensajes sintéticos con un tipo y rol obligatorio."""
         return cls(
             dialog_id=dialog_id,
             text=text,
-            type=DMessageType.ASSISTANT,
+            type=type,
             role=role,
             model=settings.GROQ_MODEL,
-            usage=None
+            usage=usage_data
         )
 
     def get_total_tokens(self) -> int:

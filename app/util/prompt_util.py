@@ -1,7 +1,6 @@
 from pathlib import Path
 
-# PROMPT TYPES
-SYSTEM_PROMPT_FILE = "system_prompt.txt"
+from loguru import logger
 
 
 def _read_prompt_text(path: Path) -> str:
@@ -16,5 +15,16 @@ def _get_prompt(prompt_file: str) -> str:
     return _read_prompt_text(get_prompts_path() / prompt_file)
 
 
-def get_system_prompt() -> str:
-    return _get_prompt(SYSTEM_PROMPT_FILE)
+def get_system_prompt(role: str) -> str:
+
+    role_name = getattr(role, "value", role)
+    logger.info(f"[*** Prompts ***] get_system_prompt role: {role_name} ")
+
+    role_prompt_file = f"system_{role_name.lower()}_prompt.txt"
+
+    role_prompt_path = get_prompts_path() / role_prompt_file
+
+    if role_name != "NOT_SUPPORTED" and role_prompt_path.exists():
+        return _read_prompt_text(role_prompt_path)
+
+    return _get_prompt("system_prompt.txt")

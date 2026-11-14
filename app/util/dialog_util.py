@@ -5,7 +5,7 @@ from groq import AsyncGroq
 from groq.types.chat import ChatCompletion
 
 from app.core.config import settings
-from app.models.dialog import DMessage, Dialog
+from app.models.dialog import DMessage, Dialog, DialogSource, DMessageRole, DMessageType
 from app.schemas.dialog_response import DialogSimpleMessage
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,9 +55,9 @@ def get_turn_from_dmessage(dialog_message: DMessage) -> dict[str, str]:
     }
 
 
-async def get_history_turn_from_dialog(duuid: UUID, db: AsyncSession) -> list[dict[str, str]]:
+async def get_turn_history_from_dialog(duuid: UUID, db: AsyncSession) -> list[dict[str, str]]:
     """
-    Returns the history turn of a dialog
+    Returns the turn history of a dialog
     :param db:
     :param duuid:
     :return:
@@ -75,26 +75,40 @@ async def get_history_turn_from_dialog(duuid: UUID, db: AsyncSession) -> list[di
 
 async def acquire_dialog(duuid: UUID, db: AsyncSession) -> Dialog:
     if not duuid:
-        return await _start_new_dialog(db)
+        return await _start_new_dialog(DialogSource.CHAT, DMessageRole.NOT_SUPPORTED, db)
     else:
         return await _get_existing_dialog(duuid, db)
 
 
-async def _start_new_dialog(db: AsyncSession) -> Dialog:
-    logger.info(f"[*** Dialog ***] starting new dialog with system initial message")
+async def _start_new_dialog(source: DialogSource, role: DMessageRole, db: AsyncSession) -> Dialog:
+
+    logger.info(f"[*** Dialog ***] starting new {source} dialog with initial message")
+
     dialog = Dialog.create_new(model_name=model)
+    dialog.source = source
     db.add(dialog)
     await db.commit()
 
-    system_initial_message = DMessage.create_system_initial_message(dialog_id=dialog.id)
+    # system_initial_message = DMessage.create_system_initial_message(dialog_id=dialog.id)
+    initial_message = _create_initial_message(dialog.id, source, role)
 
-    db.add(system_initial_message)
+    db.add(initial_message)
     await db.commit()
     await db.refresh(dialog, attribute_names=["messages"])
 
-    logger.info(f"[*** Dialog ***] new dialog: {dialog.duuid} with system initial message: {system_initial_message.id}")
+    logger.info(f"[*** Dialog ***] new {source} dialog: {dialog.duuid} with initial message: {initial_message.id}")
 
     return dialog
+
+
+def _create_initial_message(dialog_id: int, source: DialogSource, role: DMessageRole) -> DMessage:
+
+    if source == DialogSource.CHAT:
+        return DMessage.create_system_initial_message(dialog_id=dialog_id)
+    elif source == DialogSource.SYNTHETIC:
+        return DMessage.create_synthetic_initial_message(dialog_id=dialog_id, role=role)
+
+    return None
 
 
 async def _get_existing_dialog(duuid: UUID, db: AsyncSession) -> Dialog:
@@ -110,14 +124,26 @@ async def _get_existing_dialog(duuid: UUID, db: AsyncSession) -> Dialog:
     return dialog
 
 
-async def add_user_message_to_dialog(dialog: Dialog, user_message: str, db: AsyncSession) -> DMessage:
+async def add_user_message_to_dialog(
+    dialog: Dialog,
+    user_message: str,
+    db: AsyncSession,
+    role: DMessageRole = DMessageRole.NOT_SUPPORTED,
+) -> DMessage:
 
     logger.info(f"[*** Dialog ***] adding new user message to dialog: {dialog.duuid}")
 
-    user_dmessage = DMessage.create_user_message(
-        dialog_id=dialog.id,
-        text=user_message,
-    )
+    if role == DMessageRole.NOT_SUPPORTED:
+        user_dmessage = DMessage.create_user_message(
+            dialog_id=dialog.id,
+            text=user_message,
+        )
+    else:
+        user_dmessage = DMessage.create_synthetic_user_message(
+            dialog_id=dialog.id,
+            text=user_message,
+            role=role,
+        )
 
     db.add(user_dmessage)
     await db.commit()
@@ -130,26 +156,35 @@ async def add_user_message_to_dialog(dialog: Dialog, user_message: str, db: Asyn
 
 
 async def add_assistant_message_to_dialog(dialog: Dialog, dialog_completion: ChatCompletion,
-                                          db: AsyncSession) -> DMessage:
+                                          role: DMessageRole, db: AsyncSession) -> DMessage:
 
-    logger.info(f"[*** Dialog ***] adding new assistant message to dialog: {dialog.duuid}")
+    logger.info(f"[*** Dialog ***] adding new {role} assistant message to dialog: {dialog.duuid}")
 
     assistant_message = dialog_completion.choices[0].message.content
 
     usage = dialog_completion.usage.model_dump() if dialog_completion.usage else None
 
-    assistant_dmessage = DMessage.create_assistant_message(
-        dialog_id=dialog.id,
-        text=assistant_message,
-        usage_data=usage,
-    )
+    if role == DMessageRole.NOT_SUPPORTED:
+        assistant_dmessage = DMessage.create_assistant_message(
+            dialog_id=dialog.id,
+            text=assistant_message,
+            usage_data=usage,
+        )
+    else:
+        assistant_dmessage = DMessage.create_synthetic_message(
+            dialog_id=dialog.id,
+            text=assistant_message,
+            type=DMessageType.ASSISTANT,
+            role=role,
+            usage_data=usage,
+        )
 
     db.add(assistant_dmessage)
     await db.commit()
     await db.refresh(dialog, attribute_names=["messages"])
 
-    logger.info(f"[*** Dialog ***] added new assistant message id: {assistant_dmessage.id} - {assistant_message} "
-                f" to dialog: {dialog.duuid}")
+    logger.info(f"[*** Dialog ***] added new assistant message id: {assistant_dmessage.id} - role: {assistant_dmessage.role} "
+                f"- {assistant_message} to dialog: {dialog.duuid}")
 
     return assistant_dmessage
 
@@ -186,7 +221,7 @@ async def process_tool_calls(dialog_completion: ChatCompletion, turn_history: li
 
 
 # sending the user message to groq
-async def sending_user_message(turn_history: list[dict[str, str]], groq_client: AsyncGroq) \
+async def sending_turn_history(turn_history: list[dict[str, str]], groq_client: AsyncGroq) \
         -> ChatCompletion:
 
     logger.info(f"[*** Dialog ***] sending the history and the user new message to groq: {turn_history}")
