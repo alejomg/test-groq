@@ -3,6 +3,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.models.dialog import DialogSource
 
 
 class BaseResponse(BaseModel):
@@ -12,6 +13,7 @@ class BaseResponse(BaseModel):
 class DialogBasicResponse(BaseResponse):
     id: int
     duuid: UUID
+    source: DialogSource
 
 
 class DialogResponse(DialogBasicResponse):

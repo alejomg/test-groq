@@ -72,6 +72,7 @@ async def request_dialog(request: Request, dialog_request: DialogRequest, db: As
         return DialogProcessedResponse(
             id=dialog.id,
             duuid=dialog.duuid,
+            source=dialog.source,
             dialog=dialog_messages,
             metadata=dialog_metadata
         )
@@ -146,6 +147,7 @@ async def get_dialog(duuid: UUID, db: AsyncSession = Depends(get_db)):
     return DialogDetailResponse(
         id=dialog.id,
         duuid=dialog.duuid,
+        source=dialog.source,
         model=dialog.model,
         created_date=dialog.created_date,
         updated_date=dialog.updated_date,

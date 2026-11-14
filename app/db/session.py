@@ -36,12 +36,12 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-# 3. Clase Base para que hereden tus modelos
+# 3. Clase Base para que hereden los modelos
 class Base(DeclarativeBase):
     pass
 
 
-# Dependencia (yield) para inyectar la sesión en tus endpoints de FastAPI
+# Dependencia (yield) para inyectar la sesión en los endpoints de FastAPI
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session

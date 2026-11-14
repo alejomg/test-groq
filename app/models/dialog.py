@@ -17,6 +17,11 @@ class DMessageType(str, enum.Enum):
     ASSISTANT = "ASSISTANT"
 
 
+class DialogSource(str, enum.Enum):
+    USER = "USER"
+    SYNTHETIC = "SYNTHETIC"
+
+
 class Dialog(Base):
     __tablename__ = "dialog"
 
@@ -25,6 +30,13 @@ class Dialog(Base):
     
     # Modelo LLM utilizado en este diálogo
     model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    source: Mapped[DialogSource] = mapped_column(
+        Enum(DialogSource, name="dialogsource"),
+        nullable=False,
+        default=DialogSource.USER,
+        server_default=DialogSource.USER.value,
+    )
     
     # Fechas automáticas de auditoría gestionadas por el Servidor/ORM
     created_date: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -39,9 +51,13 @@ class Dialog(Base):
 
     # --- MÉTODOS DE FACTORÍA Y NEGOCIO (Rich Data Model) ---
     @classmethod
-    def create_new(cls, model_name: Optional[str] = None) -> "Dialog":
+    def create_new(
+        cls,
+        model_name: Optional[str] = None,
+        source: DialogSource = DialogSource.USER,
+    ) -> "Dialog":
         """Método de factoría para inicializar consistentemente un nuevo dialogo."""
-        return cls(duuid=uuid.uuid4(), model=model_name, messages=[])
+        return cls(duuid=uuid.uuid4(), model=model_name, source=source, messages=[])
         
     @classmethod
     async def get_by_duuid(cls, db: AsyncSession, duuid: UUID) -> Optional["Dialog"]:
@@ -59,6 +75,7 @@ class Dialog(Base):
             "id": self.id,
             "duuid": str(self.duuid),
             "model": self.model,
+            "source": self.source.value,
             "created_date": self.created_date.isoformat() if self.created_date else None,
             "updated_date": self.updated_date.isoformat() if self.updated_date else None,
         }
