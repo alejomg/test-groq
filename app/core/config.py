@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     LOGURU_LEVEL: str
     GROQ_MODEL: str
     DB_NAME: str
+    ADMIN_USERNAME: str
+    ADMIN_PASSWORD: str
+    ADMIN_SECRET_KEY: str
     # add more entries from .env
 
     # entries harcoded

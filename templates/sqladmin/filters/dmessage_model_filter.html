@@ -1,0 +1,50 @@
+{% extends "sqladmin/filters/base_filter.html" %}
+
+{% block filter_body %}
+{% set current_value = request.query_params.get(filter.parameter_name) %}
+{% set dialog_model_locked = selected_dialog is defined and selected_dialog %}
+{% set selected_models = [selected_dialog.model or filter.NO_MODEL_VALUE] if dialog_model_locked else filter.parse_values(current_value) %}
+{% set submitted_value = current_value if current_value is not none else "[]" %}
+<form method="get" action="{{ request.url.path }}" class="model-filter-form">
+  {% for key, value in request.query_params.items() %}
+  {% if key != filter.parameter_name and key != "error" and key != "page" %}
+  <input type="hidden" name="{{ key }}" value="{{ value }}">
+  {% endif %}
+  {% endfor %}
+  <input type="hidden" name="{{ filter.parameter_name }}" value="{{ submitted_value }}">
+  <div class="d-flex flex-column gap-1" role="group" aria-label="Modelo LLM">
+    {% for value, label, badge_color in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
+    <label class="form-check d-flex align-items-center gap-2 mb-0">
+      <input class="form-check-input model-filter-choice" type="checkbox" value="{{ value }}"
+             {% if value in selected_models %}checked{% endif %}
+             {% if dialog_model_locked %}disabled{% endif %}>
+      <span class="form-check-label"><span class="badge text-white" style="background-color: {{ badge_color }};">{{ label }}</span></span>
+    </label>
+    {% endfor %}
+  </div>
+  <button type="button" class="btn btn-link btn-sm px-0" {% if dialog_model_locked %}disabled{% endif %} onclick="this.form.elements['{{ filter.parameter_name }}'].value='[]'; this.form.querySelectorAll('.model-filter-choice').forEach(function(box){box.checked=false}); this.form.submit();">Limpiar</button>
+</form>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".model-filter-form").forEach(function (form) {
+    form.addEventListener("submit", function () {
+      const selected = Array.from(form.querySelectorAll(".model-filter-choice:checked"))
+        .map(function (checkbox) { return checkbox.value; });
+      form.elements["{{ filter.parameter_name }}"].value = JSON.stringify(selected);
+    });
+    form.querySelectorAll(".model-filter-choice").forEach(function (checkbox) {
+      checkbox.addEventListener("change", function () {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          const selected = Array.from(form.querySelectorAll(".model-filter-choice:checked"))
+            .map(function (item) { return item.value; });
+          form.elements["{{ filter.parameter_name }}"].value = JSON.stringify(selected);
+          form.submit();
+        }
+      });
+    });
+  });
+});
+</script>
+{% endblock %}

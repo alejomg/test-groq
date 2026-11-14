@@ -13,9 +13,39 @@ from app.util.prompt_util import get_system_prompt
 
 
 class DMessageType(str, enum.Enum):
-    SYSTEM = "SYSTEM"
-    USER = "USER"
-    ASSISTANT = "ASSISTANT"
+    def __new__(cls, value: str, label: str, badge_color: str):
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.label = label
+        member.badge_color = badge_color
+        return member
+
+    SYSTEM = ("SYSTEM", "SYSTEM", "#6c757d")
+    USER = ("USER", "USER", "#198754")
+    ASSISTANT = ("ASSISTANT", "ASSISTANT", "#0f5132")
+
+    @classmethod
+    def _get_member(cls, value: Any) -> Optional["DMessageType"]:
+        if isinstance(value, cls):
+            return value
+        normalized = str(value).rsplit(".", 1)[-1]
+        try:
+            return cls[normalized]
+        except KeyError:
+            try:
+                return cls(normalized)
+            except ValueError:
+                return None
+
+    @classmethod
+    def get_label(cls, value: Any) -> str:
+        member = cls._get_member(value)
+        return member.label if member else str(value).rsplit(".", 1)[-1]
+
+    @classmethod
+    def get_badge_color(cls, value: Any) -> str:
+        member = cls._get_member(value)
+        return member.badge_color if member else "#6c757d"
 
 
 class DialogSource(str, enum.Enum):
@@ -94,6 +124,13 @@ class Dialog(Base):
             return (self.updated_date - self.created_date).total_seconds()
         return 0.0
 
+    @property
+    def total_messages(self) -> int:
+        """Calcula la cantidad total de mensajes asociados al diálogo."""
+        if self.messages:
+            return len(self.messages)
+        return 0
+
     async def get_messages(self, db: AsyncSession, descending: bool = False) -> List["DMessage"]:
         """
         Recupera todos los mensajes asociados a este dialog de forma asíncrona.
@@ -133,6 +170,10 @@ class DMessage(Base):
 
     # Relación inversa hacia el padre
     dialog: Mapped["Dialog"] = relationship("Dialog", back_populates="messages")
+
+    @property
+    def dialog_source(self) -> DialogSource:
+        return self.dialog.source
 
     # --- MÉTODOS DE FACTORÍA Y EXTRACTORES (Rich Data Model) ---
 

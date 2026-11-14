@@ -1,0 +1,24 @@
+{% extends "sqladmin/filters/base_filter.html" %}
+
+{% block filter_body %}
+<form method="get" action="{{ request.url.path }}">
+  {% for key, value in request.query_params.items() %}
+  {% if key != filter.parameter_name and key != "message_models" and key != "error" %}
+  <input type="hidden" name="{{ key }}" value="{{ value }}">
+  {% endif %}
+  {% endfor %}
+  <select id="dialog-uuid-filter" name="{{ filter.parameter_name }}" class="form-select form-select-sm" onchange="this.form.submit()">
+    {% for value, label in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
+    <option value="{{ value }}" {% if request.query_params.get(filter.parameter_name, "__all") == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</form>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const select = document.getElementById("dialog-uuid-filter");
+  if (select && window.jQuery && window.jQuery.fn.select2) {
+    window.jQuery(select).select2({ width: "100%", minimumResultsForSearch: 0 });
+  }
+});
+</script>
+{% endblock %}
